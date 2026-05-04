@@ -1,0 +1,27 @@
+# ---- Secrets & user data — NEVER commit these ----
+config.json
+service_account.json
+ignored_shows_prev.json
+google_oauth_client.json
+release_secret.txt
+
+# ---- Runtime data ----
+sync.log
+sync-*.log
+logs/
+history.json
+.gocache/
+
+# ---- Build output ----
+*.exe
+*.exe.sha256
+
+# ---- Local scripts & build config ----
+*.bat
+
+# ---- Google OAuth credentials (never commit) ----
+client_secret_*.json
+
+# ---- Windows junk ----
+Thumbs.db
+desktop.ini

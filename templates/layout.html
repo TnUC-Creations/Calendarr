@@ -1,0 +1,285 @@
+{{define "navLinks"}}
+<li class="nav-item">
+    <a class="nav-link {{if eq .CurrentPage "dashboard"}}active{{end}}" href="/">
+        <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{if eq .CurrentPage "upcoming"}}active{{end}}" href="/upcoming">
+        <i class="bi bi-calendar3"></i> Upcoming
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{if eq .CurrentPage "history"}}active{{end}}" href="/history">
+        <i class="bi bi-clock-history"></i> History
+    </a>
+</li>
+<div class="sidebar-section mobile-nav-section">Configuration</div>
+<li class="nav-item">
+    <a class="nav-link {{if eq .CurrentPage "settings"}}active{{end}}" href="/settings">
+        <i class="bi bi-gear-fill"></i> Settings
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{if eq .CurrentPage "ignored"}}active{{end}}" href="/ignored">
+        <i class="bi bi-eye-slash-fill"></i> Ignored Shows
+    </a>
+</li>
+<div class="sidebar-section mobile-nav-section">System</div>
+<li class="nav-item">
+    <a class="nav-link {{if eq .CurrentPage "logs"}}active{{end}}" href="/logs">
+        <i class="bi bi-journal-text"></i> Logs
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {{if eq .CurrentPage "about"}}active{{end}}" href="/about">
+        <i class="bi bi-info-circle-fill"></i> About
+    </a>
+</li>
+{{end}}
+
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <script>(function(){var t=localStorage.getItem('calendarr-theme');if(t)document.documentElement.setAttribute('data-bs-theme',t);})();</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendarr</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #141920;
+            --bg-dark: #161b22;
+            --bg-card: #1c2333;
+            --border:  #30363d;
+            --accent:  #e84393;
+            --accent-hover: #c7327e;
+            --text:    #c9d1d9;
+            --text-muted: #8b949e;
+        }
+        [data-bs-theme="light"] {
+            --bg-deep: #f6f8fa;
+            --bg-dark: #ffffff;
+            --bg-card: #ffffff;
+            --border: #d0d7de;
+            --text: #1f2328;
+            --text-muted: #57606a;
+        }
+        body { background-color:var(--bg-deep); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+
+        [data-bs-theme="light"] body { background-color:var(--bg-deep); color:var(--text); }
+        [data-bs-theme="light"] .card-header { background-color:rgba(0,0,0,0.03); }
+        [data-bs-theme="light"] .page-title { color:var(--text); }
+        [data-bs-theme="light"] .sidebar,
+        [data-bs-theme="light"] .mobile-topbar,
+        [data-bs-theme="light"] #mobileNav { background-color:#ffffff; }
+        [data-bs-theme="light"] .sidebar .nav-link:hover,
+        [data-bs-theme="light"] #mobileNav .nav-link:hover { background-color:rgba(0,0,0,0.05); border-left-color:var(--border); color:var(--text); }
+        [data-bs-theme="light"] .sidebar .nav-link.active,
+        [data-bs-theme="light"] #mobileNav .nav-link.active { color:var(--accent); background-color:rgba(232,67,147,0.1); border-left-color:var(--accent); }
+        [data-bs-theme="light"] .mobile-topbar .hamburger { color:var(--text); }
+        [data-bs-theme="light"] .mobile-topbar .hamburger:hover { background:rgba(0,0,0,0.07); }
+        [data-bs-theme="light"] .custom-list-item:hover    { background:rgba(0,0,0,0.05); }
+        [data-bs-theme="light"] .custom-list-item.selected { color:var(--text); }
+        [data-bs-theme="light"] .stat-pill-added   { color:#1a7f37; }
+        [data-bs-theme="light"] .stat-pill-updated { color:#7a5800; }
+        [data-bs-theme="light"] .stat-pill-deleted { color:#cf222e; }
+        [data-bs-theme="light"] .change-updated    { color:#7a5800; }
+
+        /* Desktop sidebar */
+        .sidebar { width:220px; min-height:100vh; background-color:var(--bg-dark); border-right:1px solid var(--border); position:fixed; top:0; left:0; display:flex; flex-direction:column; }
+        .sidebar-brand { padding:1.2rem 1.5rem; font-size:1.15rem; font-weight:700; color:var(--accent); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:0.5rem; letter-spacing:0.4px; }
+        .sidebar .nav-link, #mobileNav .nav-link { color:var(--text-muted); padding:0.65rem 1.5rem; border-left:3px solid transparent; border-radius:0; display:flex; align-items:center; gap:0.6rem; font-size:0.92rem; transition:all 0.15s; }
+        .sidebar .nav-link:hover, #mobileNav .nav-link:hover { color:var(--text); background-color:rgba(255,255,255,0.05); border-left-color:var(--border); }
+        .sidebar .nav-link.active, #mobileNav .nav-link.active { color:#fff; background-color:rgba(232,67,147,0.12); border-left-color:var(--accent); }
+        .sidebar .nav-link i, #mobileNav .nav-link i { font-size:1rem; width:18px; text-align:center; }
+        .sidebar-section, .mobile-nav-section { padding:0.4rem 1.5rem 0.2rem; font-size:0.7rem; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-top:0.5rem; }
+        .sidebar-footer { margin-top:auto; padding:0.75rem 1.5rem; border-top:1px solid var(--border); }
+
+        /* Theme toggle */
+        .theme-toggle-btn { background:none; border:1px solid var(--border); color:var(--text-muted); border-radius:6px; padding:0.3rem 0.65rem; cursor:pointer; font-size:0.82rem; transition:all 0.15s; display:flex; align-items:center; gap:0.45rem; }
+        .theme-toggle-btn:hover { color:var(--accent); border-color:var(--accent); }
+        [data-bs-theme="dark"]  .theme-icon-sun  { display:inline; }
+        [data-bs-theme="dark"]  .theme-icon-moon { display:none; }
+        [data-bs-theme="light"] .theme-icon-sun  { display:none; }
+        [data-bs-theme="light"] .theme-icon-moon { display:inline; }
+
+        /* Main content */
+        .main-content { margin-left:220px; padding:2rem 2.5rem; min-height:100vh; }
+        .page-title { font-size:1.4rem; font-weight:600; color:#e2e8f0; margin-bottom:1.5rem; padding-bottom:0.75rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:0.5rem; }
+
+        /* Cards */
+        .card { background-color:var(--bg-card); border-color:var(--border); border-radius:8px; }
+        .card-header { background-color:rgba(255,255,255,0.04); border-bottom-color:var(--border); font-weight:600; font-size:0.9rem; padding:0.75rem 1.25rem; }
+
+        /* Buttons */
+        .btn-primary { background-color:var(--accent); border-color:var(--accent); }
+        .btn-primary:hover { background-color:var(--accent-hover); border-color:var(--accent-hover); }
+
+        /* Forms */
+        .form-control, .form-select { background-color:var(--bg-dark); border-color:var(--border); color:var(--text); }
+        .form-control:focus, .form-select:focus { background-color:var(--bg-dark); border-color:var(--accent); color:var(--text); box-shadow:0 0 0 0.2rem rgba(232,67,147,0.2); }
+        .form-check-input:checked { background-color:var(--accent); border-color:var(--accent); }
+        .form-text { color:var(--text-muted) !important; }
+
+        /* Status dots */
+        .status-dot { width:10px; height:10px; border-radius:50%; display:inline-block; flex-shrink:0; }
+        .dot-running { background-color:#3fb950; animation:pulse 1.4s infinite; }
+        .dot-idle    { background-color:#6e7681; }
+        .dot-success { background-color:#3fb950; }
+        .dot-error   { background-color:#f85149; }
+        .dot-never   { background-color:#6e7681; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* Log output */
+        pre.log-output { background-color:var(--bg-deep); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:1rem; max-height:620px; overflow-y:auto; font-size:0.82rem; line-height:1.5; margin:0; white-space:pre-wrap; word-break:break-word; }
+
+        /* Misc */
+        .list-group-item { background-color:transparent; border-color:var(--border); color:var(--text); }
+        .list-group-item:first-child { border-top:none; }
+        .table { color:var(--text); }
+        .table-borderless td { border:none; }
+        .alert { border-radius:6px; font-size:0.9rem; }
+        .help-btn { background:none; border:none; padding:0 0 2px 3px; color:var(--text-muted); font-size:0.8rem; line-height:1; vertical-align:middle; cursor:pointer; transition:color 0.15s; }
+        .help-btn:hover { color:var(--accent); }
+        .stat-pill { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:0.8rem; }
+        .stat-pill-added   { background:rgba(63,185,80,0.15);  color:#7ee787; }
+        .stat-pill-updated { background:rgba(210,153,34,0.15); color:#e3b341; }
+        .stat-pill-deleted { background:rgba(248,81,73,0.15);  color:#f85149; }
+        .change-updated { color:#e3b341; }
+
+        /* Mobile top bar */
+        .mobile-topbar { position:fixed; top:0; left:0; right:0; height:56px; background-color:var(--bg-dark); border-bottom:1px solid var(--border); z-index:1030; display:flex; align-items:center; padding:0 1rem; gap:0.75rem; }
+        .mobile-topbar .brand-text { font-size:1.1rem; font-weight:700; color:var(--accent); letter-spacing:0.4px; }
+        .mobile-topbar .hamburger { background:none; border:none; color:var(--text); font-size:1.5rem; padding:0.2rem 0.4rem; line-height:1; cursor:pointer; border-radius:4px; }
+        .mobile-topbar .hamburger:hover { background:rgba(255,255,255,0.07); }
+
+        /* Mobile offcanvas nav */
+        #mobileNav { background-color:var(--bg-dark); border-right:1px solid var(--border); width:240px; }
+        #mobileNav .offcanvas-header { border-bottom:1px solid var(--border); padding:1rem 1.5rem; }
+        #mobileNav .mobile-brand { font-size:1.1rem; font-weight:700; color:var(--accent); letter-spacing:0.4px; display:flex; align-items:center; gap:0.5rem; }
+        #mobileNav .offcanvas-body { padding:0; display:flex; flex-direction:column; }
+
+        @media (max-width:767.98px) {
+            .main-content { margin-left:0; padding:1rem; padding-top:calc(56px + 1rem); }
+            .page-title { font-size:1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Mobile top bar -->
+<div class="mobile-topbar d-md-none">
+    <button class="hamburger" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNav" aria-label="Open navigation">
+        <i class="bi bi-list"></i>
+    </button>
+    <a href="/" class="brand-text" style="text-decoration:none;"><img src="/assets/sidebar-logo.png" alt="" style="width:26px;height:26px;object-fit:contain;vertical-align:middle;"> Calendarr</a>
+    <button onclick="toggleTheme()" class="ms-auto theme-toggle-btn" title="Toggle light/dark mode" style="border:none; padding:0.3rem 0.5rem;">
+        <i class="bi bi-sun-fill theme-icon-sun"></i>
+        <i class="bi bi-moon-fill theme-icon-moon"></i>
+    </button>
+</div>
+
+<!-- Mobile offcanvas nav -->
+<div class="offcanvas offcanvas-start" id="mobileNav" tabindex="-1">
+    <div class="offcanvas-header">
+        <a href="/" class="mobile-brand" style="text-decoration:none;">
+            <img src="/assets/sidebar-logo.png" alt="" style="width:26px;height:26px;object-fit:contain;vertical-align:middle;"> Calendarr
+            <span style="font-size:0.6rem; font-weight:400; color:var(--text-muted); margin-left:6px;">v{{.AppVersion}}</span>
+        </a>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <ul class="nav flex-column mt-1">
+            {{template "navLinks" .}}
+        </ul>
+        <div class="sidebar-footer">
+            <button onclick="toggleTheme()" class="theme-toggle-btn" title="Toggle light/dark mode">
+                <i class="bi bi-sun-fill theme-icon-sun"></i>
+                <i class="bi bi-moon-fill theme-icon-moon"></i>
+                <span class="theme-icon-sun" style="font-size:0.8rem;">Light mode</span>
+                <span class="theme-icon-moon" style="font-size:0.8rem;">Dark mode</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Desktop sidebar -->
+<nav class="sidebar d-none d-md-flex">
+    <a href="/" class="sidebar-brand" style="text-decoration:none;">
+        <img src="/assets/sidebar-logo.png" alt="" style="width:26px;height:26px;object-fit:contain;vertical-align:middle;"> Calendarr
+        <span style="font-size:0.6rem; font-weight:400; color:var(--text-muted); margin-left:auto;">v{{.AppVersion}}</span>
+    </a>
+    <ul class="nav flex-column mt-1">
+        {{template "navLinks" .}}
+    </ul>
+    <div class="sidebar-footer">
+        <button onclick="toggleTheme()" class="theme-toggle-btn" title="Toggle light/dark mode">
+            <i class="bi bi-sun-fill theme-icon-sun"></i>
+            <i class="bi bi-moon-fill theme-icon-moon"></i>
+            <span class="theme-icon-sun" style="font-size:0.8rem;">Light mode</span>
+            <span class="theme-icon-moon" style="font-size:0.8rem;">Dark mode</span>
+        </button>
+    </div>
+</nav>
+
+<div class="main-content">
+    {{if not .CalendarConnected}}
+    <div class="alert alert-dismissible fade show mb-3 d-flex align-items-center gap-2 py-2" role="alert"
+         style="background:rgba(248,81,73,0.1); border:1px solid rgba(248,81,73,0.3); font-size:0.88rem;">
+        <i class="bi bi-exclamation-triangle-fill" style="color:#f85149;"></i>
+        <span>Google Calendar is not connected. <a href="/settings#google-calendar-card" class="fw-semibold" style="color:#f85149;">Connect in Settings →</a></span>
+        <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="alert" style="font-size:0.75rem;"></button>
+    </div>
+    {{end}}
+    {{if .UpdateAvailable}}
+    <div class="alert alert-dismissible fade show mb-3 d-flex align-items-center gap-2 py-2" role="alert"
+         style="background:rgba(56,139,253,0.12); border:1px solid rgba(56,139,253,0.3); font-size:0.88rem;">
+        <i class="bi bi-arrow-up-circle-fill" style="color:#388bfd;"></i>
+        <span><strong>Calendarr v{{.UpdateVersion}}</strong> is available. <a href="/about#updates" class="fw-semibold" style="color:#388bfd;">View update →</a></span>
+        <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="alert" style="font-size:0.75rem;"></button>
+    </div>
+    {{end}}
+    {{if .Flash}}
+    <div class="alert alert-{{.Flash.Category}} alert-dismissible fade show mb-3" role="alert">
+        {{.Flash.Message}}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {{end}}
+    {{template "content" .}}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const CALENDARR_CSRF_TOKEN = '{{.CSRFToken}}';
+function csrfHeaders(headers) {
+    return Object.assign({}, headers || {}, {'X-CSRF-Token': CALENDARR_CSRF_TOKEN});
+}
+function csrfFetch(url, options) {
+    const opts = Object.assign({}, options || {});
+    opts.headers = csrfHeaders(opts.headers);
+    return fetch(url, opts);
+}
+
+const _mobileNav = document.getElementById('mobileNav');
+if (_mobileNav) {
+    _mobileNav.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', () => { bootstrap.Offcanvas.getInstance(_mobileNav)?.hide(); });
+    });
+}
+
+function toggleTheme() {
+    var current = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-bs-theme', next);
+    localStorage.setItem('calendarr-theme', next);
+}
+</script>
+{{block "scripts" .}}{{end}}
+</body>
+</html>
+{{end}}

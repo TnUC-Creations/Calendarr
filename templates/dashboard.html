@@ -1,0 +1,513 @@
+{{define "content"}}
+<div class="d-flex align-items-center justify-content-between mb-4 pb-3" style="border-bottom:1px solid var(--border);">
+    <h2 class="mb-0" style="font-size:1.4rem; font-weight:600; color:var(--text); display:flex; align-items:center; gap:0.5rem;">
+        <i class="bi bi-speedometer2"></i> Dashboard
+    </h2>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="restart-btn"
+            onclick="restartService()">
+        <i class="bi bi-arrow-clockwise"></i> Restart Service
+    </button>
+</div>
+
+<div class="row g-4 mb-4">
+
+    <!-- Status -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">Sync Status</div>
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="status-dot {{if .IsRunning}}dot-running{{else}}dot-idle{{end}}" id="status-dot"></span>
+                    <span class="fs-5 fw-semibold" id="status-text">
+                        {{if .IsRunning}}Running...{{else}}Idle{{end}}
+                    </span>
+                </div>
+                <div id="progress-line" class="mb-2" style="min-height:1.2rem; font-size:0.8rem; color:var(--text-muted);">
+                    {{if .IsRunning}}{{.SyncProgress}}{{end}}
+                </div>
+                <table class="table table-borderless table-sm mb-2" style="font-size:0.88rem;">
+                    <tr>
+                        <td class="text-muted ps-0" style="width:90px;">Last run</td>
+                        <td id="last-run">{{.LastRunStr}}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted ps-0">Result</td>
+                        <td>
+                            <span class="status-dot {{.StatusDotClass}}"></span>
+                            <span id="last-status">{{.LastRunStatus}}</span>
+                        </td>
+                    </tr>
+                </table>
+                <!-- Sync stats -->
+                <div class="d-flex gap-2 flex-wrap" id="stats-row">
+                    <span class="stat-pill stat-pill-added">
+                        <i class="bi bi-plus-lg"></i> <span id="stat-added">{{.Added}}</span> added
+                    </span>
+                    <span class="stat-pill stat-pill-updated">
+                        <i class="bi bi-arrow-repeat"></i> <span id="stat-updated">{{.Updated}}</span> updated
+                    </span>
+                    <span class="stat-pill stat-pill-deleted">
+                        <i class="bi bi-dash-lg"></i> <span id="stat-deleted">{{.Deleted}}</span> deleted
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">Schedule</div>
+            <div class="card-body">
+                <p class="text-muted mb-1" style="font-size:0.85rem;">Next sync</p>
+                <p class="fs-5 fw-semibold mb-3" id="next-run">{{.NextRunStr}}</p>
+                <p class="text-muted mb-0" style="font-size:0.85rem;">
+                    <i class="bi bi-clock"></i> Every {{.Config.RunIntervalHours}} hour(s)
+                    &nbsp;|&nbsp;
+                    {{if .Config.UseRadarr}}<span class="badge bg-warning text-dark">Radarr</span>{{end}}
+                    {{if .Config.UseSonarr}}<span class="badge bg-primary">Sonarr</span>{{end}}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">Quick Actions</div>
+            <div class="card-body d-flex flex-column justify-content-center gap-2">
+                <form method="post" action="/run">
+                    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+                    <button type="submit" class="btn btn-primary w-100" id="run-btn"
+                            {{if .IsRunning}}disabled{{end}}>
+                        <i class="bi bi-play-circle-fill"></i>
+                        {{if .IsRunning}}Running...{{else}}Run Now{{end}}
+                    </button>
+                </form>
+                <a href="/upcoming" class="btn btn-outline-secondary w-100">
+                    <i class="bi bi-calendar3"></i> Upcoming Releases
+                </a>
+                <button type="button" class="btn btn-outline-info w-100" id="preview-btn" onclick="startPreview()">
+                    <i class="bi bi-eye"></i> Preview Changes
+                </button>
+                <div class="btn-group w-100" role="group">
+                    <button type="button" class="btn btn-outline-danger"
+                            id="cleanup-trigger"
+                            onclick="prepareCleanup('past')"
+                            title="Deletes Calendarr calendar events (Theater Release, Digital Release, episodes). Your other calendar events are not affected.">
+                        <i class="bi bi-trash3"></i> Clean Up Past Events
+                    </button>
+                    <button type="button" class="btn btn-outline-danger dropdown-toggle dropdown-toggle-split"
+                            id="cleanup-dropdown-toggle"
+                            data-bs-toggle="dropdown" aria-expanded="false"
+                            style="flex:0 0 auto; padding-left:0.6rem; padding-right:0.6rem;">
+                        <span class="visually-hidden">More options</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="prepareCleanup('past'); return false;">
+                            <i class="bi bi-clock-history me-1"></i> Past Events</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="prepareCleanup('future'); return false;">
+                            <i class="bi bi-calendar-event me-1"></i> Future Events</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="prepareCleanup('all'); return false;">
+                            <i class="bi bi-calendar-x me-1"></i> All Events</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Last run notifications -->
+<div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-bell-fill"></i> Last Run — Changes</span>
+        <span class="badge bg-secondary" id="changes-badge">{{len .LastRunChanges}}</span>
+    </div>
+    <div id="changes-body" class="card-body p-0">
+        {{if .LastRunChanges}}
+            <ul class="list-group list-group-flush">
+                {{range .LastRunChanges}}
+                    <li class="list-group-item" style="font-size:0.9rem;">
+                        {{if eq .Action "deleted"}}
+                            <i class="bi bi-dash-lg text-danger me-1"></i>
+                        {{else if eq .Action "updated"}}
+                            <i class="bi bi-arrow-repeat me-1 change-updated"></i>
+                        {{else}}
+                            <i class="bi bi-plus-lg text-success me-1"></i>
+                        {{end}}
+                        {{.Message}}
+                    </li>
+                {{end}}
+            </ul>
+        {{else}}
+            <div class="p-3 text-muted" style="font-size:0.9rem;">
+                <i class="bi bi-info-circle"></i>
+                {{if ne .LastRunStatus "Never run"}}No changes on the last run.{{else}}No sync has run yet. Click <strong>Run Now</strong> to start.{{end}}
+            </div>
+        {{end}}
+    </div>
+</div>
+
+<!-- Preview modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background:var(--bg-card); border-color:var(--border);">
+            <div class="modal-header" style="border-color:var(--border);">
+                <h5 class="modal-title">
+                    <i class="bi bi-eye text-info"></i> Preview Changes
+                    <span class="badge bg-secondary ms-2 align-middle" id="preview-count" style="font-size:0.75rem;"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="preview-results" style="font-size:0.92rem; max-height:60vh; overflow-y:auto;">
+                <div class="text-muted text-center py-3">
+                    <span class="spinner-border spinner-border-sm me-2"></span> Running preview...
+                </div>
+            </div>
+            <div class="modal-footer" style="border-color:var(--border);">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary d-none" id="preview-apply-btn" onclick="applyPreviewChanges()">
+                    <i class="bi bi-play-circle-fill"></i> Run Sync Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cleanup modal -->
+<div class="modal fade" id="cleanupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background:var(--bg-card); border-color:var(--border);">
+            <div class="modal-header" style="border-color:var(--border);">
+                <h5 class="modal-title"><i class="bi bi-trash3 text-danger"></i> Clean Up Past Events</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="font-size:0.92rem;">
+                <p>This will delete <strong><span id="cleanup-mode-desc">past</span></strong> calendar events that match Calendarr naming patterns:</p>
+                <ul>
+                    <li>Events ending in <code>Theater Release</code></li>
+                    <li>Events ending in <code>Digital Release</code></li>
+                    <li>Episode events matching <code>S##E##</code></li>
+                </ul>
+                <p id="cleanup-all-warning" class="text-warning d-none mb-2" style="font-size:0.88rem;">
+                    <i class="bi bi-exclamation-triangle-fill"></i> <strong>All</strong> mode removes both past and future Calendarr events.
+                </p>
+                <p class="text-muted mb-0" style="font-size:0.85rem;">Other events on your calendar are not affected.</p>
+            </div>
+            <div class="modal-footer" style="border-color:var(--border);">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="cleanup-btn" onclick="runCleanup()">
+                    <i class="bi bi-trash3"></i> Delete Past Events
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+let wasRunning = {{if .IsRunning}}true{{else}}false{{end}};
+
+function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function changeIcon(action) {
+    if (action === 'deleted') return '<i class="bi bi-dash-lg text-danger me-1"></i>';
+    if (action === 'updated') return '<i class="bi bi-arrow-repeat me-1 change-updated"></i>';
+    return '<i class="bi bi-plus-lg text-success me-1"></i>';
+}
+
+function updateChangesCard(changes, status) {
+    const body  = document.getElementById('changes-body');
+    const badge = document.getElementById('changes-badge');
+    if (!body || !badge) return;
+    const list = changes || [];
+    badge.textContent = list.length;
+    if (list.length > 0) {
+        body.innerHTML = '<ul class="list-group list-group-flush">' +
+            list.map(c => `<li class="list-group-item" style="font-size:0.9rem;">${changeIcon(c.action)} ${escHtml(c.message)}</li>`).join('') +
+            '</ul>';
+    } else {
+        const neverRun = !status || status === 'Never run';
+        body.innerHTML = '<div class="p-3 text-muted" style="font-size:0.9rem;"><i class="bi bi-info-circle"></i> ' +
+            (neverRun ? 'No sync has run yet. Click <strong>Run Now</strong> to start.' : 'No changes on the last run.') +
+            '</div>';
+    }
+}
+
+function pollStatus() {
+    fetch('/api/status')
+        .then(r => r.json())
+        .then(data => {
+            const dot  = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            const btn  = document.getElementById('run-btn');
+
+            const previewBtn = document.getElementById('preview-btn');
+            if (data.is_running) {
+                dot.className = 'status-dot dot-running';
+                text.textContent = 'Running...';
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Running...';
+                if (previewBtn && !previewBtn.innerHTML.includes('spinner')) previewBtn.disabled = true;
+                wasRunning = true;
+            } else {
+                dot.className = 'status-dot dot-idle';
+                text.textContent = 'Idle';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-play-circle-fill"></i> Run Now';
+                if (previewBtn && !previewBtn.innerHTML.includes('spinner')) {
+                    previewBtn.disabled = false;
+                    if (!previewBtn.innerHTML.includes('Running')) {
+                        previewBtn.innerHTML = '<i class="bi bi-eye"></i> Preview Changes';
+                    }
+                }
+                wasRunning = false;
+            }
+
+            document.getElementById('progress-line').textContent = data.is_running ? (data.sync_progress || '') : '';
+
+            if (data.last_run)
+                document.getElementById('last-run').textContent = new Date(data.last_run).toLocaleString();
+            if (data.next_run)
+                document.getElementById('next-run').textContent = new Date(data.next_run).toLocaleString();
+            document.getElementById('last-status').textContent = data.last_run_status;
+
+            if (data.last_run_stats) {
+                document.getElementById('stat-added').textContent   = data.last_run_stats.added;
+                document.getElementById('stat-updated').textContent = data.last_run_stats.updated;
+                document.getElementById('stat-deleted').textContent = data.last_run_stats.deleted;
+            }
+
+            updateChangesCard(data.last_run_changes, data.last_run_status);
+        })
+        .catch(() => {});
+}
+setInterval(pollStatus, 3000);
+
+function restartService() {
+    if (!confirm('Restart the Calendarr service? The page will go offline briefly then reload automatically.')) return;
+    const btn = document.getElementById('restart-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Restarting...';
+
+    csrfFetch('/api/restart', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.ok) {
+                alert(data.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Restart Service';
+                return;
+            }
+            // Poll until service comes back up
+            const poll = setInterval(() => {
+                fetch('/api/status')
+                    .then(() => { clearInterval(poll); location.reload(); })
+                    .catch(() => {});
+            }, 2000);
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Restart Service';
+        });
+}
+
+function showPageAlert(cls, message) {
+    const html = `<div class="alert alert-${cls} alert-dismissible fade show mb-3" role="alert">
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>`;
+    document.querySelector('.main-content').insertAdjacentHTML('afterbegin', html);
+}
+
+// ---- Preview ----------------------------------------------------------------
+
+function startPreview() {
+    const btn = document.getElementById('preview-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running...';
+
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('previewModal'));
+    document.getElementById('preview-results').innerHTML =
+        '<div class="text-muted text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span> Running preview...</div>';
+    document.getElementById('preview-count').textContent = '';
+    document.getElementById('preview-apply-btn')?.classList.add('d-none');
+    modal.show();
+
+    csrfFetch('/api/preview', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.started) {
+                pollPreview();
+            } else {
+                resetPreviewBtn();
+                document.getElementById('preview-results').innerHTML =
+                    '<div class="text-danger"><i class="bi bi-exclamation-circle"></i> ' + escHtml(data.message || 'Could not start preview.') + '</div>';
+            }
+        })
+        .catch(() => { resetPreviewBtn(); modal.hide(); });
+}
+
+function resetPreviewBtn() {
+    const btn = document.getElementById('preview-btn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-eye"></i> Preview Changes';
+}
+
+function pollPreview() {
+    fetch('/api/preview/status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.running) {
+                const btn = document.getElementById('preview-btn');
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ' + escHtml(data.progress || 'Running...');
+                setTimeout(pollPreview, 1500);
+            } else if (data.done) {
+                resetPreviewBtn();
+                renderPreviewResults(data);
+            }
+        })
+        .catch(() => setTimeout(pollPreview, 2000));
+}
+
+function renderPreviewResults(data) {
+    const body    = document.getElementById('preview-results');
+    const countEl = document.getElementById('preview-count');
+
+    if (data.error) {
+        body.innerHTML = '<div class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>' + escHtml(data.error) + '</div>';
+        countEl.textContent = '';
+        return;
+    }
+
+    const added   = data.added   || [];
+    const updated = data.updated || [];
+    const deleted = data.deleted || [];
+    const total   = added.length + updated.length + deleted.length;
+
+    countEl.textContent = total + ' change' + (total !== 1 ? 's' : '');
+
+    if (total === 0) {
+        body.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-check-circle text-success me-1"></i> Everything is up to date. No changes would be made.</p>';
+        return;
+    }
+
+    document.getElementById('preview-apply-btn')?.classList.remove('d-none');
+
+    let html = '';
+    if (added.length) {
+        html += '<p class="mb-1 fw-semibold text-success" style="font-size:0.9rem;">Added (' + added.length + ')</p>' +
+            '<ul class="mb-3 ps-3" style="font-size:0.88rem;">' + added.map(m => '<li>' + escHtml(m) + '</li>').join('') + '</ul>';
+    }
+    if (updated.length) {
+        html += '<p class="mb-1 fw-semibold change-updated" style="font-size:0.9rem;">Updated (' + updated.length + ')</p>' +
+            '<ul class="mb-3 ps-3" style="font-size:0.88rem;">' + updated.map(m => '<li>' + escHtml(m) + '</li>').join('') + '</ul>';
+    }
+    if (deleted.length) {
+        html += '<p class="mb-1 fw-semibold text-danger" style="font-size:0.9rem;">Removed (' + deleted.length + ')</p>' +
+            '<ul class="mb-0 ps-3" style="font-size:0.88rem;">' + deleted.map(m => '<li>' + escHtml(m) + '</li>').join('') + '</ul>';
+    }
+    body.innerHTML = html;
+}
+
+function applyPreviewChanges() {
+    bootstrap.Modal.getInstance(document.getElementById('previewModal')).hide();
+    csrfFetch('/api/run', { method: 'POST' }).catch(() => {});
+}
+
+// ---- Cleanup ----------------------------------------------------------------
+
+let currentCleanupMode = 'past';
+
+const CLEANUP_LABELS = { past: 'past', future: 'future', all: 'all' };
+const CLEANUP_TITLES = { past: 'Past Events', future: 'Future Events', all: 'All Events' };
+
+function prepareCleanup(mode) {
+    const trigger = document.getElementById('cleanup-trigger');
+    if (trigger.disabled) return;
+    currentCleanupMode = mode;
+    document.getElementById('cleanup-mode-desc').textContent = CLEANUP_LABELS[mode];
+    document.querySelector('#cleanupModal .modal-title').innerHTML =
+        '<i class="bi bi-trash3 text-danger"></i> Clean Up ' + CLEANUP_TITLES[mode];
+    document.getElementById('cleanup-all-warning').classList.toggle('d-none', mode !== 'all');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('cleanupModal')).show();
+}
+
+function setCleanupRunning(trigger) {
+    trigger.disabled = true;
+    trigger.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Scanning...';
+    const ddToggle = document.getElementById('cleanup-dropdown-toggle');
+    if (ddToggle) ddToggle.disabled = true;
+}
+
+function setCleanupIdle(trigger) {
+    trigger.disabled = false;
+    trigger.innerHTML = '<i class="bi bi-trash3"></i> Clean Up Past Events';
+    const ddToggle = document.getElementById('cleanup-dropdown-toggle');
+    if (ddToggle) ddToggle.disabled = false;
+}
+
+function pollCleanup() {
+    const trigger = document.getElementById('cleanup-trigger');
+    fetch('/api/cleanup/status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.running) {
+                trigger.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Deleted ${data.deleted.toLocaleString()} &nbsp;/&nbsp; scanned ${data.scanned.toLocaleString()}`;
+                setTimeout(pollCleanup, 1500);
+            } else if (data.done) {
+                setCleanupIdle(trigger);
+                showPageAlert(data.ok ? 'success' : 'danger', data.message);
+            }
+        })
+        .catch(() => setTimeout(pollCleanup, 2000));
+}
+
+function runCleanup() {
+    const trigger = document.getElementById('cleanup-trigger');
+    const modalBtn = document.getElementById('cleanup-btn');
+    bootstrap.Modal.getInstance(document.getElementById('cleanupModal')).hide();
+    setCleanupRunning(trigger);
+    modalBtn.disabled = true;
+    modalBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Starting...';
+
+    csrfFetch('/api/cleanup', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: currentCleanupMode})
+    })
+        .then(r => r.json())
+        .then(data => {
+            modalBtn.disabled = false;
+            modalBtn.innerHTML = '<i class="bi bi-trash3"></i> Delete Events';
+            if (data.started) {
+                pollCleanup();
+            } else {
+                setCleanupIdle(trigger);
+                showPageAlert('danger', data.message || 'Cleanup failed to start.');
+            }
+        })
+        .catch(err => {
+            modalBtn.disabled = false;
+            modalBtn.innerHTML = '<i class="bi bi-trash3"></i> Delete Events';
+            setCleanupIdle(trigger);
+            showPageAlert('danger', 'Cleanup failed: ' + err);
+        });
+}
+
+// Resume progress display if cleanup was already running when page loaded
+fetch('/api/cleanup/status')
+    .then(r => r.json())
+    .then(data => {
+        if (data.running) {
+            setCleanupRunning(document.getElementById('cleanup-trigger'));
+            pollCleanup();
+        }
+    })
+    .catch(() => {});
+</script>
+{{end}}

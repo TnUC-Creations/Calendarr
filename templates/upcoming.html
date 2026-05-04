@@ -1,0 +1,125 @@
+{{define "content"}}
+<h2 class="page-title"><i class="bi bi-calendar3"></i> Upcoming Releases</h2>
+
+<div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-calendar-range"></i> Next 120 Days</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary" id="event-count">—</span>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary active" id="filter-all" onclick="setFilter('all')">All</button>
+                <button type="button" class="btn btn-outline-warning" id="filter-theater" onclick="setFilter('theater')">Theater</button>
+                <button type="button" class="btn btn-outline-info" id="filter-digital" onclick="setFilter('digital')">Digital</button>
+                <button type="button" class="btn btn-outline-primary" id="filter-episode" onclick="setFilter('episode')">Episodes</button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0" id="upcoming-body">
+        <div class="p-4 text-center text-muted">
+            <div class="spinner-border spinner-border-sm me-2"></div> Loading upcoming releases...
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+let allEvents = [];
+let activeFilter = 'all';
+
+function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-' + f).classList.add('active');
+    renderEvents();
+}
+
+function kindBadge(kind) {
+    if (kind === 'theater') return '<span class="badge bg-warning text-dark"><i class="bi bi-camera-reels"></i> Theater</span>';
+    if (kind === 'digital') return '<span class="badge bg-info text-dark"><i class="bi bi-laptop"></i> Digital</span>';
+    if (kind === 'episode') return '<span class="badge bg-primary"><i class="bi bi-tv"></i> Episode</span>';
+    return '<span class="badge bg-secondary">Other</span>';
+}
+
+function localDateFromISODate(iso) {
+    const day = String(iso || '').split('T')[0];
+    const parts = day.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return new Date(iso);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function formatDate(iso) {
+    const d = localDateFromISODate(iso);
+    return d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function daysUntil(iso) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const d = localDateFromISODate(iso); d.setHours(0,0,0,0);
+    return Math.round((d - today) / 86400000);
+}
+
+function daysLabel(n) {
+    if (n === 0) return '<span class="badge bg-success">Today</span>';
+    if (n === 1) return '<span class="badge bg-success">Tomorrow</span>';
+    if (n <= 7)  return `<span class="badge bg-success">${n}d away</span>`;
+    if (n <= 30) return `<span class="badge bg-secondary">${n}d away</span>`;
+    return `<span class="badge bg-secondary text-muted">${n}d away</span>`;
+}
+
+function renderEvents() {
+    const filtered = activeFilter === 'all' ? allEvents : allEvents.filter(e => e.kind === activeFilter);
+    document.getElementById('event-count').textContent = filtered.length;
+
+    const body = document.getElementById('upcoming-body');
+    if (!filtered.length) {
+        body.innerHTML = `<div class="p-4 text-center text-muted"><i class="bi bi-calendar-x"></i> No upcoming releases found.</div>`;
+        return;
+    }
+
+    // Group by date
+    const groups = {};
+    filtered.forEach(e => {
+        const day = e.date.split('T')[0];
+        if (!groups[day]) groups[day] = [];
+        groups[day].push(e);
+    });
+
+    let html = '<ul class="list-group list-group-flush">';
+    const sortedDays = Object.keys(groups).sort();
+    sortedDays.forEach(day => {
+        const n = daysUntil(day);
+        html += `<li class="list-group-item px-3 py-2" style="background:rgba(255,255,255,0.02);border-color:var(--border);">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-semibold" style="min-width:160px;">${formatDate(day)}</span>
+                ${daysLabel(n)}
+            </div>
+        </li>`;
+        groups[day].forEach(e => {
+            html += `<li class="list-group-item px-4 py-2 d-flex align-items-center justify-content-between" style="border-color:var(--border);">
+                <span style="font-size:0.9rem;">${e.title}${e.calendar ? ` <span class="text-muted ms-2" style="font-size:0.78rem;"><i class="bi bi-calendar3"></i> ${e.calendar}</span>` : ''}</span>
+                <span class="ms-2">${kindBadge(e.kind)}</span>
+            </li>`;
+        });
+    });
+    html += '</ul>';
+    body.innerHTML = html;
+}
+
+fetch('/api/upcoming')
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            document.getElementById('upcoming-body').innerHTML =
+                `<div class="p-4 text-danger"><i class="bi bi-exclamation-triangle"></i> ${data.error}</div>`;
+            return;
+        }
+        allEvents = data.events || [];
+        renderEvents();
+    })
+    .catch(err => {
+        document.getElementById('upcoming-body').innerHTML =
+            `<div class="p-4 text-danger"><i class="bi bi-exclamation-triangle"></i> Failed to load: ${err}</div>`;
+    });
+</script>
+{{end}}

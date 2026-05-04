@@ -1,0 +1,111 @@
+{{define "content"}}
+<h2 class="page-title"><i class="bi bi-clock-history"></i> History</h2>
+
+<div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-journal-check"></i> Sync Audit Log</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary">{{len .History}} entries</span>
+            {{if .History}}
+            <form method="post" action="/history/clear" onsubmit="return confirm('Clear all history? This cannot be undone.')">
+                <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash3"></i> Clear History
+                </button>
+            </form>
+            {{end}}
+        </div>
+    </div>
+    {{if .History}}
+    <div class="px-3 pt-3 pb-2 d-flex flex-wrap gap-2 align-items-center" style="border-bottom:1px solid var(--border);">
+        <input type="text" id="history-search" class="form-control form-control-sm" placeholder="Search events..." style="max-width:260px;" autocomplete="off">
+        <div class="btn-group btn-group-sm" id="action-filters">
+            <button class="btn btn-outline-secondary action-filter active" data-action="all">All</button>
+            <button class="btn btn-outline-success action-filter" data-action="added">Added</button>
+            <button class="btn btn-outline-warning action-filter" data-action="updated">Updated</button>
+            <button class="btn btn-outline-danger action-filter" data-action="deleted">Deleted</button>
+            <button class="btn btn-outline-secondary action-filter" data-action="system">System</button>
+        </div>
+        <span class="text-muted ms-auto" style="font-size:0.8rem;"><span id="history-visible">{{len .History}}</span> of {{len .History}} shown</span>
+    </div>
+    {{end}}
+    <div class="card-body p-0">
+        {{if .History}}
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" style="font-size:0.85rem;">
+                <thead style="background:rgba(255,255,255,0.04); border-bottom:1px solid var(--border);">
+                    <tr>
+                        <th class="ps-3 py-2" style="width:170px; color:var(--text-muted); font-weight:600;">Time</th>
+                        <th class="py-2" style="width:100px; color:var(--text-muted); font-weight:600;">Action</th>
+                        <th class="py-2" style="color:var(--text-muted); font-weight:600;">Event</th>
+                    </tr>
+                </thead>
+                <tbody id="history-tbody">
+                    {{range .History}}
+                    <tr data-action="{{.Action}}" data-message="{{.Message}}" style="border-color:var(--border);">
+                        <td class="ps-3 py-2 text-muted" style="white-space:nowrap;">{{.Timestamp}}</td>
+                        <td class="py-2">
+                            {{if eq .Action "added"}}
+                                <span class="badge bg-success text-white"><i class="bi bi-plus-lg"></i> added</span>
+                            {{else if eq .Action "updated"}}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat"></i> updated</span>
+                            {{else if eq .Action "deleted"}}
+                                <span class="badge bg-danger text-white"><i class="bi bi-dash-lg"></i> deleted</span>
+                            {{else if eq .Action "system"}}
+                                <span class="badge bg-secondary text-white"><i class="bi bi-gear"></i> system</span>
+                            {{else}}
+                                <span class="badge bg-secondary">{{.Action}}</span>
+                            {{end}}
+                        </td>
+                        <td class="py-2">{{.Message}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <div class="p-4 text-muted" style="font-size:0.9rem;">
+            <i class="bi bi-info-circle"></i> No history yet. Run a sync to start building the audit log.
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function () {
+    const tbody   = document.getElementById('history-tbody');
+    const search  = document.getElementById('history-search');
+    const filters = document.querySelectorAll('.action-filter');
+    const countEl = document.getElementById('history-visible');
+    if (!tbody) return;
+
+    let activeAction = 'all';
+
+    function applyFilter() {
+        const q = (search?.value || '').toLowerCase();
+        let visible = 0;
+        tbody.querySelectorAll('tr').forEach(row => {
+            const matchesAction = activeAction === 'all' || row.dataset.action === activeAction;
+            const matchesText   = !q || row.dataset.message.toLowerCase().includes(q);
+            const show = matchesAction && matchesText;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        if (countEl) countEl.textContent = visible;
+    }
+
+    filters.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filters.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeAction = btn.dataset.action;
+            applyFilter();
+        });
+    });
+
+    search?.addEventListener('input', applyFilter);
+})();
+</script>
+{{end}}

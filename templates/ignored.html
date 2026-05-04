@@ -1,0 +1,327 @@
+{{define "content"}}
+<h2 class="page-title"><i class="bi bi-eye-slash-fill"></i> Ignored Shows</h2>
+
+<div class="card mb-3">
+    <div class="card-body pb-2">
+        <p class="text-muted mb-0" style="font-size:0.88rem;">
+            <i class="bi bi-info-circle"></i>
+            Move shows into the <strong>Ignored</strong> column to exclude them from syncing.
+            Any calendar events for ignored shows will be removed on the next sync.
+            Click a show to select it, then use the arrow buttons to move it.
+            Hold <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to select multiple. Changes save automatically.
+        </p>
+    </div>
+</div>
+
+<style>
+.custom-list {
+    overflow-y: auto;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    min-height: 420px;
+    max-height: 520px;
+    flex: 1 1 auto;
+}
+.custom-list-item {
+    padding: 0.28rem 0.75rem;
+    font-size: 0.88rem;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+}
+.custom-list-item:hover { background: rgba(255,255,255,0.06); }
+.custom-list-item.selected { background: rgba(232,67,147,0.2); color: #fff; }
+[data-bs-theme="light"] .custom-list-item:hover { background: rgba(0,0,0,0.05); }
+[data-bs-theme="light"] .custom-list-item.selected { color: #1f2328; }
+.custom-list-item.hidden { display: none; }
+@media (max-width: 767.98px) {
+    .custom-list { min-height: 220px; max-height: 340px; }
+}
+</style>
+
+<div class="row g-3 align-items-stretch">
+
+    <!-- Active shows (left) -->
+    <div class="col-12 col-md">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-tv"></i> Active Shows</span>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="show-ended-toggle" style="cursor:pointer;">
+                        <label class="form-check-label text-muted" for="show-ended-toggle" style="font-size:0.8rem;">Show ended</label>
+                    </div>
+                    <span class="badge bg-secondary" id="active-count">—</span>
+                </div>
+            </div>
+            <div class="card-body p-2 d-flex flex-column gap-2">
+                <input type="text" class="form-control form-control-sm" id="active-search"
+                       placeholder="Filter..." autocomplete="off">
+                <div id="active-list" class="custom-list">
+                    <div class="custom-list-item text-muted" id="active-loading">Loading from Sonarr...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Arrow buttons (middle) -->
+    <div class="col-12 col-md-auto d-flex flex-row flex-md-column justify-content-center align-items-center gap-2 py-1 py-md-0 px-md-1">
+        <button type="button" class="btn btn-outline-secondary" id="btn-ignore"
+                title="Ignore selected" style="font-size:1.1rem; width:44px;">›</button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-unignore"
+                title="Unignore selected" style="font-size:1.1rem; width:44px;">‹</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-ignore-all"
+                title="Ignore all" style="width:44px;">»</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-unignore-all"
+                title="Unignore all" style="width:44px;">«</button>
+    </div>
+
+    <!-- Ignored shows (right) -->
+    <div class="col-12 col-md">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-eye-slash"></i> Ignored</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span id="save-status" style="font-size:0.8rem;"></span>
+                    <span class="badge bg-danger" id="ignored-count">{{len .Shows}}</span>
+                </div>
+            </div>
+            <div class="card-body p-2 d-flex flex-column gap-2">
+                <input type="text" class="form-control form-control-sm" id="ignored-search"
+                       placeholder="Filter..." autocomplete="off">
+                <div id="ignored-list" class="custom-list">
+                    {{range .Shows}}
+                        <div class="custom-list-item" data-value="{{.}}">{{.}}</div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="mt-2" style="min-height:1.5rem;">
+    <span class="text-muted" style="font-size:0.85rem;" id="sonarr-error"></span>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+const activeEl      = document.getElementById('active-list');
+const ignoredEl     = document.getElementById('ignored-list');
+const activeSearch  = document.getElementById('active-search');
+const ignoredSearch = document.getElementById('ignored-search');
+const activeCount   = document.getElementById('active-count');
+const ignoredCount  = document.getElementById('ignored-count');
+const saveStatus    = document.getElementById('save-status');
+const errorEl       = document.getElementById('sonarr-error');
+const showEndedToggle = document.getElementById('show-ended-toggle');
+
+// Restore "Show ended" preference from localStorage
+showEndedToggle.checked = localStorage.getItem('calendarr-show-ended') === 'true';
+showEndedToggle.addEventListener('change', () => {
+    localStorage.setItem('calendarr-show-ended', showEndedToggle.checked);
+    applyFilter(activeSearch, activeEl);
+});
+
+let saveTimer = null;
+
+// Maps show title -> Sonarr status string (populated on load)
+const showStatusMap = new Map();
+
+// ---- List helpers ----
+
+function getItems(el) {
+    return Array.from(el.querySelectorAll('.custom-list-item:not(#active-loading)'));
+}
+
+function getValues(el) {
+    return getItems(el).map(d => d.dataset.value);
+}
+
+function getSelected(el) {
+    return Array.from(el.querySelectorAll('.custom-list-item.selected')).map(d => d.dataset.value);
+}
+
+function makeItem(value) {
+    const d = document.createElement('div');
+    d.className = 'custom-list-item';
+    d.dataset.value = value;
+    d.dataset.status = showStatusMap.get(value) || '';
+    d.textContent = value;
+    attachItemEvents(d);
+    return d;
+}
+
+function rebuildList(el, values) {
+    const sorted = [...values].sort((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'}));
+    el.innerHTML = '';
+    sorted.forEach(v => el.appendChild(makeItem(v)));
+    updateCounts();
+}
+
+function updateCounts() {
+    const ai = getItems(activeEl).filter(i => !i.classList.contains('hidden')).length;
+    const ii = getItems(ignoredEl).filter(i => !i.classList.contains('hidden')).length;
+    activeCount.textContent  = ai;
+    ignoredCount.textContent = ii;
+    ignoredCount.className   = ii > 0 ? 'badge bg-danger' : 'badge bg-secondary';
+}
+
+// ---- Click / touch selection ----
+
+const lastClicked = { active: null, ignored: null };
+
+function listOf(item) {
+    return activeEl.contains(item) ? 'active' : 'ignored';
+}
+
+function attachItemEvents(item) {
+    item.addEventListener('click', e => handleItemClick(e, item));
+    item.addEventListener('dblclick', () => {
+        const side   = listOf(item);
+        const fromEl = side === 'active' ? activeEl : ignoredEl;
+        const toEl   = side === 'active' ? ignoredEl : activeEl;
+        const value  = item.dataset.value;
+        const srcSet = new Set(getValues(fromEl));
+        const dstSet = new Set(getValues(toEl));
+        if (!srcSet.has(value)) return;
+        srcSet.delete(value);
+        dstSet.add(value);
+        rebuildList(fromEl, [...srcSet]);
+        rebuildList(toEl,   [...dstSet]);
+        applyFilter(activeSearch,  activeEl);
+        applyFilter(ignoredSearch, ignoredEl);
+        autoSave();
+    });
+}
+
+function handleItemClick(e, item) {
+    const el    = listOf(item) === 'active' ? activeEl : ignoredEl;
+    const lcKey = listOf(item);
+    const items = getItems(el).filter(i => !i.classList.contains('hidden'));
+    const idx   = items.indexOf(item);
+
+    if (e.shiftKey && lastClicked[lcKey] !== null) {
+        const prev = items.indexOf(lastClicked[lcKey]);
+        if (prev !== -1) {
+            const lo = Math.min(prev, idx), hi = Math.max(prev, idx);
+            if (!e.ctrlKey && !e.metaKey) {
+                getItems(el).forEach(i => i.classList.remove('selected'));
+            }
+            items.slice(lo, hi + 1).forEach(i => i.classList.add('selected'));
+            return;
+        }
+    }
+
+    if (e.ctrlKey || e.metaKey) {
+        item.classList.toggle('selected');
+    } else {
+        const wasSoleSelected = item.classList.contains('selected') &&
+            getItems(el).filter(i => i.classList.contains('selected')).length === 1;
+        getItems(el).forEach(i => i.classList.remove('selected'));
+        if (!wasSoleSelected) item.classList.add('selected');
+    }
+    lastClicked[lcKey] = item;
+}
+
+// ---- Move ----
+
+function moveTo(fromEl, toEl, all) {
+    // When moving "all", only move visible items so hidden (filtered) shows stay put.
+    const toMove = all
+        ? getItems(fromEl).filter(i => !i.classList.contains('hidden')).map(i => i.dataset.value)
+        : getSelected(fromEl);
+    if (!toMove.length) return false;
+    const destSet = new Set(getValues(toEl));
+    const srcSet  = new Set(getValues(fromEl));
+    toMove.forEach(v => { destSet.add(v); srcSet.delete(v); });
+    rebuildList(fromEl, [...srcSet]);
+    rebuildList(toEl,   [...destSet]);
+    return true;
+}
+
+function applyFilter(input, el) {
+    const q = input.value.toLowerCase();
+    const showEnded = showEndedToggle.checked;
+    getItems(el).forEach(item => {
+        const matchesText   = item.dataset.value.toLowerCase().includes(q);
+        const isEnded       = item.dataset.status === 'ended';
+        // Status filter only applies to the active (left) list.
+        const matchesStatus = el !== activeEl || showEnded || !isEnded;
+        item.classList.toggle('hidden', !matchesText || !matchesStatus);
+    });
+    updateCounts();
+}
+
+function moveAndFilter(from, to, all = false) {
+    const moved = moveTo(from, to, all);
+    applyFilter(activeSearch,  activeEl);
+    applyFilter(ignoredSearch, ignoredEl);
+    if (moved) autoSave();
+}
+
+// ---- Auto-save ----
+
+function autoSave() {
+    saveStatus.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm" style="width:0.65rem;height:0.65rem;"></span> Saving...</span>';
+    csrfFetch('/api/ignored/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ shows: getValues(ignoredEl) })
+    })
+    .then(r => r.json())
+    .then(data => {
+        saveStatus.innerHTML = data.ok
+            ? '<span style="color:#7ee787;"><i class="bi bi-check-lg"></i> Saved</span>'
+            : `<span class="text-danger"><i class="bi bi-x-lg"></i> ${data.message || 'Save failed'}</span>`;
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => { saveStatus.innerHTML = ''; }, 3000);
+    })
+    .catch(() => {
+        saveStatus.innerHTML = '<span class="text-danger"><i class="bi bi-x-lg"></i> Save failed</span>';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => { saveStatus.innerHTML = ''; }, 3000);
+    });
+}
+
+// ---- Wire up existing server-rendered ignored items ----
+getItems(ignoredEl).forEach(item => attachItemEvents(item));
+updateCounts();
+
+// ---- Buttons ----
+document.getElementById('btn-ignore').addEventListener('click',       () => moveAndFilter(activeEl,  ignoredEl));
+document.getElementById('btn-unignore').addEventListener('click',     () => moveAndFilter(ignoredEl, activeEl));
+document.getElementById('btn-ignore-all').addEventListener('click',   () => moveAndFilter(activeEl,  ignoredEl, true));
+document.getElementById('btn-unignore-all').addEventListener('click', () => moveAndFilter(ignoredEl, activeEl,  true));
+
+// ---- Filter inputs ----
+activeSearch.addEventListener('input',  () => applyFilter(activeSearch,  activeEl));
+ignoredSearch.addEventListener('input', () => applyFilter(ignoredSearch, ignoredEl));
+
+// ---- Load Sonarr shows ----
+fetch('/api/sonarr-shows')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('active-loading')?.remove();
+        if (data.error) {
+            errorEl.textContent = '⚠ Could not reach Sonarr: ' + data.error;
+        }
+        const ignoredSet = new Set(getValues(ignoredEl));
+        (data.shows || []).forEach(s => showStatusMap.set(s.title, s.status));
+        const active = (data.shows || []).filter(s => !ignoredSet.has(s.title)).map(s => s.title);
+        rebuildList(activeEl, active);
+        applyFilter(activeSearch, activeEl);
+    })
+    .catch(err => {
+        const loading = document.getElementById('active-loading');
+        if (loading) loading.textContent = 'Failed to load Sonarr shows.';
+        errorEl.textContent = String(err);
+    });
+</script>
+{{end}}

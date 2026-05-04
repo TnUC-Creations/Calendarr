@@ -1,0 +1,41 @@
+{{define "content"}}
+<h2 class="page-title"><i class="bi bi-journal-text"></i> Logs</h2>
+
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span>Sync Log</span>
+            {{if .LogFiles}}
+            <select class="form-select form-select-sm" style="width:auto;"
+                    onchange="window.location='/logs?file='+encodeURIComponent(this.value)">
+                {{range .LogFiles}}
+                <option value="{{.Name}}" {{if eq $.SelectedFile .Name}}selected{{end}}>{{.Display}}</option>
+                {{end}}
+            </select>
+            {{end}}
+            <span class="text-muted" style="font-size:0.8rem;">(last 50 runs, newest first)</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="/logs{{if .SelectedFile}}?file={{.SelectedFile}}{{end}}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </a>
+            {{if .SelectedFile}}
+            <a href="/logs/download?file={{.SelectedFile}}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-download"></i> Download
+            </a>
+            <form method="post" action="/logs/clear"
+                  onsubmit="return confirm('Clear this log file? This cannot be undone.')">
+                <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+                <input type="hidden" name="file" value="{{.SelectedFile}}">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash3"></i> Clear
+                </button>
+            </form>
+            {{end}}
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <pre class="log-output">{{if .LogContent}}{{.LogContent}}{{else}}No logs yet. Run a sync to generate output.{{end}}</pre>
+    </div>
+</div>
+{{end}}

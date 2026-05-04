@@ -1,0 +1,751 @@
+{{define "content"}}
+<h2 class="page-title"><i class="bi bi-info-circle-fill"></i> About</h2>
+
+<div class="row g-4">
+
+    <!-- Branding -->
+    <div class="col-md-5">
+        <div class="card h-100">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center text-center py-5">
+                <img src="/assets/sidebar-logo.png" alt="Calendarr" style="width:90px; height:90px; object-fit:contain;">
+                <h2 class="mt-3 mb-0 fw-bold" style="color:var(--accent); letter-spacing:1px;">Calendarr</h2>
+                <p class="text-muted mb-3" style="font-size:0.85rem;">Radarr &amp; Sonarr → Google Calendar</p>
+                <span class="badge bg-secondary px-3 py-2" style="font-size:0.85rem;">v{{.AppVersion}}</span>
+                <p class="mb-1 mt-4" style="font-size:0.9rem;">Made by <strong style="color:var(--text);">{{.AppAuthor}}</strong></p>
+                <p class="text-muted mb-0" style="font-size:0.82rem;">{{.AppCreated}}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Runtime info -->
+    <div class="col-md-7">
+        <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-cpu"></i> Runtime</div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-borderless mb-0" style="font-size:0.88rem;">
+                    <tbody>
+                        <tr>
+                            <td class="ps-3 text-muted" style="width:180px;">Go</td>
+                            <td class="pe-3">{{.GoVersion}}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Platform</td>
+                            <td class="pe-3">{{.PlatformInfo}}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">google.golang.org/api</td>
+                            <td class="pe-3">{{.Deps.GoAPI}}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">golang.org/x/oauth2</td>
+                            <td class="pe-3">{{.Deps.OAuth2}}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Uptime</td>
+                            <td class="pe-3">{{.UptimeStr}}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-github"></i> Project</div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-borderless mb-0" style="font-size:0.88rem;">
+                    <tbody>
+                        <tr>
+                            <td class="ps-3 text-muted" style="width:180px;">Source Code</td>
+                            <td class="pe-3">
+                                <a href="https://github.com/TnUC-Creations/Calendarr" target="_blank" rel="noopener">
+                                    github.com/TnUC-Creations/Calendarr
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Bug Reports</td>
+                            <td class="pe-3">
+                                <a href="https://github.com/TnUC-Creations/Calendarr/issues/new?labels=bug" target="_blank" rel="noopener">
+                                    Open a Bug Report
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Feature Requests</td>
+                            <td class="pe-3">
+                                <a href="https://github.com/TnUC-Creations/Calendarr/issues/new?labels=enhancement" target="_blank" rel="noopener">
+                                    Open a Feature Request
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-sliders"></i> Active Configuration</div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-borderless mb-0" style="font-size:0.88rem;">
+                    <tbody>
+                        <tr>
+                            <td class="ps-3 text-muted" style="width:180px;">Radarr</td>
+                            <td class="pe-3">
+                                {{if .Config.UseRadarr}}
+                                    <span class="badge bg-warning text-dark">Enabled</span>
+                                    <span class="text-muted ms-2" style="font-size:0.82rem;">{{.Config.RadarrURL}}</span>
+                                {{else}}
+                                    <span class="badge bg-secondary">Disabled</span>
+                                {{end}}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Sonarr</td>
+                            <td class="pe-3">
+                                {{if .Config.UseSonarr}}
+                                    <span class="badge bg-primary">Enabled</span>
+                                    <span class="text-muted ms-2" style="font-size:0.82rem;">{{.Config.SonarrURL}}</span>
+                                {{else}}
+                                    <span class="badge bg-secondary">Disabled</span>
+                                {{end}}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Pushover</td>
+                            <td class="pe-3">
+                                {{if .Config.UsePushover}}
+                                    <span class="badge bg-success">Enabled</span>
+                                {{else}}
+                                    <span class="badge bg-secondary">Disabled</span>
+                                {{end}}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Google Calendar</td>
+                            <td class="pe-3">
+                                {{if .Config.GoogleRefreshToken}}
+                                    <span class="badge bg-success">Connected</span>
+                                {{else}}
+                                    <span class="badge bg-secondary">Not connected</span>
+                                {{end}}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Sync Interval</td>
+                            <td class="pe-3">Every {{.Config.RunIntervalHours}} hour(s)</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Web Port</td>
+                            <td class="pe-3">{{.Config.WebPort}}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3 text-muted">Web UI Access</td>
+                            <td class="pe-3">
+                                {{if eq .Config.WebBindAddress "0.0.0.0"}}
+                                    Local network
+                                {{else}}
+                                    Local only
+                                {{end}}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Updates -->
+<div class="card mt-4" id="updates">
+    <div class="card-header"><i class="bi bi-arrow-up-circle"></i> Updates</div>
+    <div class="card-body">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-6">
+                <table class="table table-sm table-borderless mb-0" style="font-size:0.88rem;">
+                    <tbody>
+                        <tr>
+                            <td class="ps-0 text-muted" style="width:160px;">Current Version</td>
+                            <td class="pe-0">
+                                <span class="badge bg-secondary px-2">v{{.AppVersion}}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-0 text-muted">Latest Version</td>
+                            <td class="pe-0" id="update-latest">
+                                {{if .Update.Checking}}
+                                    <span class="text-muted" style="font-size:0.85rem;"><span class="spinner-border spinner-border-sm me-1"></span>Checking...</span>
+                                {{else if .Update.Error}}
+                                    <span class="text-muted" style="font-size:0.85rem;" title="{{.Update.Error}}">Unable to check</span>
+                                {{else if .Update.Available}}
+                                    <span class="badge bg-primary px-2">v{{.Update.LatestVer}}</span>
+                                    <span class="badge bg-success ms-1">Update available</span>
+                                {{else if .Update.LatestVer}}
+                                    <span class="badge bg-secondary px-2">v{{.Update.LatestVer}}</span>
+                                    <span class="text-muted ms-1" style="font-size:0.82rem;">Up to date</span>
+                                {{else}}
+                                    <span class="text-muted" style="font-size:0.85rem;">Not checked yet</span>
+                                {{end}}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="ps-0 text-muted">Last Checked</td>
+                            <td class="pe-0 text-muted" style="font-size:0.82rem;" id="update-last-checked">
+                                {{if .Update.LastChecked.IsZero}}—{{else}}{{.Update.LastChecked.Format "2006-01-02 15:04:05"}}{{end}}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-6 d-flex flex-column gap-2 align-items-start" id="update-actions">
+                {{if .Update.Available}}
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{.Update.ReleaseURL}}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-journal-text"></i> Release Notes
+                    </a>
+                    <button class="btn btn-sm btn-primary" onclick="applyUpdate(this)">
+                        <i class="bi bi-download"></i> Download &amp; Install v{{.Update.LatestVer}}
+                    </button>
+                </div>
+                {{end}}
+                <button class="btn btn-sm btn-outline-secondary" onclick="checkNow(this)">
+                    <i class="bi bi-arrow-clockwise"></i> Check Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Changelog -->
+<div class="card mt-4">
+    <div class="card-header"><i class="bi bi-card-list"></i> Changelog</div>
+    <div class="card-body p-0">
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.5.4</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Added additional security updates for release builds.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.5.3</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Fixed the Restart Service button so it is clickable again after service name handling changed.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.5.2</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Moved older changelog entries behind a Show older versions button so recent updates are easier to scan.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.5.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Rotated the built-in Google Calendar connection secret.</li>
+                <li>Added a Web UI Access setting for local-only or local-network access.</li>
+                <li>Added request protection for settings, cleanup, update, and other browser actions.</li>
+                <li>Added a backup warning because backups contain API keys and Google tokens.</li>
+                <li>In-app updates now require a matching SHA-256 checksum before installing.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.5.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Added day offsets for Radarr theater releases, Radarr digital releases, and Sonarr episodes, useful when upstream API dates are shifted by timezone conflicts.</li>
+                <li>Added Radarr tracking options so you can choose Theater Release, Digital Release, or both.</li>
+                <li>The Save Settings button and save status now stay visible while scrolling.</li>
+                <li>Settings now autosave after changes so leaving the page does not lose edits.</li>
+            </ul>
+        </div>
+        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
+                <i class="bi bi-chevron-down me-1"></i>Show older versions
+            </button>
+        </div>
+        <div class="collapse" id="older-changelog">
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.4.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>You can now sync to up to five Google calendars, with each calendar receiving Radarr releases, Sonarr episodes, or both.</li>
+                <li>Upcoming Releases and cleanup now include every configured calendar.</li>
+                <li>Radarr and Sonarr events can now use custom Google Calendar event colors per calendar.</li>
+                <li>Turning off a calendar source or removing a calendar target can now offer to clean up existing Calendarr events from that calendar.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.3.5</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Fixed all-day movie and episode events that could appear on the wrong day in Google Calendar.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.3.4</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Fixed sync so moved TV episodes are put back on the correct calendar date.</li>
+                <li>Fixed movie release dates that came from Radarr with a UTC timestamp showing on the wrong day.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.3.3</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Fixed TV episodes showing one day ahead in Google Calendar. Calendarr now uses the local broadcast date from Sonarr instead of converting from a UTC timestamp.</li>
+                <li>Fixed a missing log entry when the update checker could not reach GitHub.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.3.2</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>You can now pick which Google Calendar Calendarr writes events to from the Settings page. Disconnect and reconnect your Google account once after updating to grant the new permission.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.3.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Narrowed the Google Calendar permission request to events only, instead of full calendar access. If you connected Google Calendar before this update, disconnect and reconnect once to apply the narrower permission.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.3.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>System tray icon temporarily removed. The app now runs as a service only. Use the web UI at http://localhost:5000 to manage everything. The tray will return in a future release.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.2.2</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>One-click update now works end to end. The update script stops the service, closes the tray app so the exe file is not locked, swaps in the new version, and restarts the service. The browser detects when the service is back and reloads the page automatically.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.2.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Radarr log now summarises movies with no upcoming release dates as a single count instead of one line per movie.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.2.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Sync logs now show exactly what happened at every step: which movies and shows were checked, which were skipped and why, what was added or removed, and whether Pushover sent a notification or why it didn't.</li>
+                <li>Fixed a bug where ignored shows were being removed from the calendar twice in the same sync, doubling the deleted count in logs and history.</li>
+                <li>Each sync log entry now includes the app version and service uptime, so you have context even if the log was recently cleared.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.1.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Backup now downloads a ZIP file containing both your settings and ignored shows list, so your full setup is captured in one file.</li>
+                <li>Restore accepts the ZIP backup and restores both your settings and ignored shows list in one go.</li>
+                <li>Ignored Shows page lists no longer expand the whole page for large libraries. Each box has a fixed height with its own scroll.</li>
+                <li>Active Shows list has a "Show ended" toggle in the header. Off by default so ended shows are hidden, keeping the list shorter. Your preference is saved between sessions.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.0.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Google Calendar connect now opens in a new tab so unsaved settings are not lost.</li>
+                <li>Test button errors are now capped at a short preview. Hover the badge to see the full message.</li>
+                <li>Save Settings button added at the top of the Settings page.</li>
+                <li>Light mode color fixes across the dashboard, settings, and ignored shows pages, including the Upcoming button and updated-event icon.</li>
+                <li>New app icon and logo added throughout the interface and browser tab.</li>
+                <li>Opening the Start Menu shortcut while Calendarr is already running now opens the web UI instead of starting a duplicate tray icon.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.0.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Google Calendar now connects via a one-click OAuth flow.</li>
+                <li>Dark and light mode toggle in the sidebar. Your choice is saved and restored on every page load.</li>
+                <li>Version number now shows in the sidebar next to the app name.</li>
+                <li>Preview Changes now includes auto-cleanup in the results. If auto-cleanup is enabled, the preview shows which past events would also be removed.</li>
+                <li>Ignored shows are now stored as JSON instead of a plain text file. Existing files migrate automatically on first launch.</li>
+                <li>Application errors, crashes, and HTTP failures are now written to the daily log file alongside sync output.</li>
+                <li>First beta release.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.9.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Preview Changes modal now has a Run Sync Now button that appears when there are pending changes, so you can go straight from preview to applying without closing and clicking again.</li>
+                <li>Last Run Changes on the dashboard now shows green plus, yellow arrows, and red minus icons matching the History page, instead of green checks for everything.</li>
+                <li>Reduced the gap between cards on the Settings page so the dark background shows through less between them.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.9.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Preview Changes button on the dashboard runs a full sync in read-only mode and shows exactly what would be added, updated, or removed without touching your calendar.</li>
+                <li>History page now has a live search bar and action filter buttons so you can quickly find specific events across 2000 entries.</li>
+                <li>Calendar events now include a description pulled from Radarr and Sonarr, so movie and episode synopses show up when you open an event in Google Calendar.</li>
+                <li>Pushover sound is now selectable in Settings from the full list of Pushover notification sounds.</li>
+                <li>Settings page layout rearranged: Radarr, Sonarr, and Google Calendar now sit side by side in equal columns, and Pushover has its own full-width row so it has room to breathe as more options are added.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.8.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Settings page now validates required fields before saving. Empty Calendar ID, API keys for enabled services, or Pushover credentials show an inline error and block the save rather than failing silently on the next sync.</li>
+                <li>Sonarr episode sync now loads all existing calendar events once before processing instead of making a separate API call for every episode. Large libraries will sync significantly faster.</li>
+                <li>If Radarr or Sonarr returns a malformed response, the sync now logs a visible error instead of silently completing with zero changes.</li>
+                <li>Auto-cleanup now matches events using the same naming patterns configured in your Event Naming Templates instead of hardcoded defaults. If you use custom event names, cleanup will correctly find and remove those events.</li>
+                <li>Favicon is now served from the embedded binary instead of the filesystem, so it works correctly regardless of where the exe is located.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.7.2</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Auto-cleanup now logs each deleted event by name instead of just the total count</li>
+                <li>Cleanup deletions now appear in History with a deleted badge, same as sync deletions</li>
+                <li>When auto-cleanup runs after a sync, the deleted count and event names show up in the dashboard status pills and Last Run Changes</li>
+                <li>Launching Calendarr from the Start Menu now starts the service automatically if it is not already running</li>
+                <li>Pushover notification settings now let you choose which event types trigger a notification. Added and updated are on by default, deleted is off.</li>
+                <li>Pushover now sends one notification per sync run instead of separate ones for sync and cleanup. Results are grouped by Added, Updated, and Removed with counts so the message is easier to read at a glance.</li>
+                <li>Last Run Changes on the dashboard now updates live without needing a page refresh</li>
+                <li>Fixed double-clicking a show on the Ignored Shows page not moving it between lists</li>
+                <li>Fixed auto-cleanup deleting today's events when the server clock is ahead in UTC. The cutoff now uses the server's local time.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.7.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Changelog on the About page now collapses older versions behind a toggle so it does not take over the whole page</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.7.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Windows system tray icon that starts automatically at login via Start Menu or registry. Menu provides Open, Start/Stop/Restart Service, Run Sync Now, and Exit, with items enabled or disabled based on live service state.</li>
+                <li>Exit from the tray now stops the service as well as closing the icon</li>
+                <li>Improved logging: app startup details (version, platform, port, data directory), scheduler events, and update check results are now written to the daily log file for easier debugging</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.6.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>In-app update checker: compares against GitHub Releases on startup and every 24 hours; banner appears site-wide when an update is available</li>
+                <li>One-click update on the About page: downloads the new exe, stops the service, swaps the file, and restarts automatically</li>
+                <li>Service Name removed from Settings. The service name is now fixed as <em>Calendarr</em> and managed entirely by the installer.</li>
+                <li>Default <code>config.json</code> is created automatically on first launch if none exists</li>
+                <li>Sync on Start defaults to <strong>off</strong> on fresh installs, so nothing runs until you have configured your services.</li>
+                <li>Pre-flight connectivity check before every sync: if Radarr or Sonarr is enabled but unreachable the sync aborts immediately with a clear error instead of silently reporting success</li>
+                <li>Sync log now shows <code>[OK]</code> / <code>[ERROR]</code> for every service connection so failures are always visible</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.5.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Added Auto-Cleanup Past Events toggle in Settings → General. When enabled, past Calendarr events are automatically removed from Google Calendar at the end of each successful sync.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.4.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Logs are now stored as daily files in a <code>logs/</code> subfolder (<code>sync-YYYY-MM-DD.log</code>) instead of a single ever-growing file</li>
+                <li>Configurable log file retention: keep the last N daily files (default 30); oldest files are pruned automatically after each sync</li>
+                <li>Configurable history cap: maximum history entries before the oldest are removed (default 2000); both values are set in Settings → General</li>
+                <li>Logs viewer now has a date dropdown to browse any retained log day; Download and Clear apply to the selected file only</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.3.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>About page now shows application uptime and links to the GitHub project, bug reports, and feature requests</li>
+                <li>API keys and tokens on the Settings page are now masked by default with a show/hide toggle</li>
+                <li>Calendarr logo in the sidebar and mobile nav now links back to the dashboard</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v0.2.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Rewritten in Go as a single self-contained executable with no Python runtime or dependencies required.</li>
+                <li>Templates compiled directly into the executable; only <code>config.json</code> and <code>service_account.json</code> are needed alongside the exe</li>
+                <li>Live sync progress: the dashboard status card now shows the current activity while a sync is running (fetching movies, processing episodes, etc.)</li>
+                <li>Fixed Ignored Shows dual-listbox not displaying on mobile browsers; replaced native multi-select with a custom list that works on all devices</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.1.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Clean Up now supports three modes: Past Events, Future Events, and All Events, selectable from a split button on the dashboard</li>
+                <li>Pushover notifications automatically split into multiple messages when the change list exceeds 1,000 characters, so no entries are ever cut off</li>
+                <li>Test buttons on the Settings page now use the current form values rather than the last saved config, so you can type credentials and test before saving</li>
+                <li>Added Download button to the Logs page to save the raw sync log as a file</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.0.6</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Fixed cleanup progress displaying on a hidden modal button; progress now shows directly on the dashboard button where it is always visible</li>
+                <li>Dashboard detects a running cleanup on page load and resumes showing live progress automatically</li>
+                <li>Cleanup start, completion, and any errors are now written to both the sync log and history</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.0.5</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Clean Up Past Events now runs in the background; the button shows live progress (events scanned and deleted) while it works through large calendars</li>
+                <li>Fixed cleanup stopping after 2,500 events; it now pages through the entire calendar regardless of size</li>
+                <li>Cleanup no longer blocks the browser with a hanging HTTP request that could time out on large libraries</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.0.4</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Fixed service restart reliability: now uses a self-deleting batch file launched via a new independent window, bypassing NSSM child-process cleanup that was preventing the start after stop</li>
+                <li>Fixed log viewer showing entries oldest-first again; admin log entries now use the same block separator as sync runs so the newest-first ordering works correctly</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.0.3</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Moved Restart Service button to the top-right of the dashboard, keeping Quick Actions clean</li>
+                <li>Admin actions now appear in both the sync log and history: service restarts, log clears, and history clears are all tracked</li>
+                <li>History page now shows a System badge for admin events so they stand out from sync activity</li>
+                <li>Clearing history now leaves a marker entry so the page is never completely blank</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.0.2</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Fixed Internal Server Error on the Logs page caused by a stray template tag</li>
+                <li>Logs now display newest runs at the top (last 50 runs shown, split cleanly by sync session)</li>
+                <li>History and dashboard stat pills now use high-contrast colors readable on dark backgrounds</li>
+                <li>History timestamps no longer display the raw ISO format; they now show as a clean date and time</li>
+                <li>Added Restart Service button to the dashboard with a matching Service Name field in Settings</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.0.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Sidebar section label updated to <em>Configuration</em> for clarity</li>
+                <li>Improved button contrast throughout the UI (Download Config, Upcoming Releases, and other secondary actions are now more visually distinct)</li>
+                <li>Ignored Shows: filter now stays active after moving a show via double-click or arrow buttons</li>
+                <li>About page: removed visual divider artifact and improved layout centering</li>
+                <li>Logs page: added Clear Log button with confirmation prompt</li>
+                <li>Upcoming Releases: now exclusively shows Calendarr-managed events; personal calendar items are never included</li>
+                <li>Cleanup: confirmed safe, only removes events matching Calendarr naming patterns; personal events are never affected</li>
+                <li>History page: fixed a data-binding issue that caused the log to appear blank after a sync</li>
+            </ul>
+        </div>
+        <div class="p-3">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v0.0.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">April 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Initial release of Calendarr</li>
+                <li>Dashboard with live sync status, per-run stats, and last-run change summary</li>
+                <li>Upcoming Releases page showing the next 120 days of calendar events</li>
+                <li>History log with per-action audit trail (added, updated, deleted)</li>
+                <li>Settings page covering all Radarr, Sonarr, Google Calendar, and Pushover configuration</li>
+                <li>Ignored Shows manager with dual-listbox pulled live from Sonarr</li>
+                <li>Custom event naming templates for theater releases, digital releases, and episodes</li>
+                <li>Backup and restore support for <code>config.json</code></li>
+                <li>Past event cleanup with pattern-based filtering to protect personal calendar items</li>
+                <li>Sync on Start toggle; configurable sync interval</li>
+                <li>Connection test buttons for each integrated service</li>
+                <li>Logs viewer with the last 300 lines of sync output</li>
+            </ul>
+        </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function checkNow(btn) {
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Checking...';
+    csrfFetch('/api/update/check', { method: 'POST' })
+        .then(() => {
+            const poll = setInterval(() => {
+                fetch('/api/update/status')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (!d.checking) {
+                            clearInterval(poll);
+                            btn.disabled = false;
+                            btn.innerHTML = orig;
+                            updateUI(d);
+                        }
+                    });
+            }, 800);
+        });
+}
+
+function applyUpdate(btn) {
+    if (!confirm('Download and install the update? The service will restart automatically.')) return;
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Downloading...';
+    csrfFetch('/api/update/apply', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Restarting...';
+                // Poll until the service goes down then comes back, then reload.
+                let wentDown = false;
+                const poll = setInterval(() => {
+                    fetch('/api/status')
+                        .then(r => {
+                            if (wentDown) {
+                                clearInterval(poll);
+                                window.location.reload();
+                            }
+                        })
+                        .catch(() => { wentDown = true; });
+                }, 2000);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                alert('Update failed: ' + d.message);
+            }
+        });
+}
+
+function updateUI(d) {
+    const latestEl  = document.getElementById('update-latest');
+    const lastEl    = document.getElementById('update-last-checked');
+    const actionsEl = document.getElementById('update-actions');
+    if (!latestEl) return;
+
+    if (d.available) {
+        latestEl.innerHTML =
+            '<span class="badge bg-primary px-2">v' + d.latest_ver + '</span> ' +
+            '<span class="badge bg-success ms-1">Update available</span>';
+        actionsEl.innerHTML =
+            '<div class="d-flex gap-2 flex-wrap">' +
+            (d.release_url ? '<a href="' + d.release_url + '" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-journal-text"></i> Release Notes</a>' : '') +
+            '<button class="btn btn-sm btn-primary" onclick="applyUpdate(this)"><i class="bi bi-download"></i> Download &amp; Install v' + d.latest_ver + '</button>' +
+            '</div>' +
+            '<button class="btn btn-sm btn-outline-secondary" onclick="checkNow(this)"><i class="bi bi-arrow-clockwise"></i> Check Now</button>';
+    } else if (d.latest_ver) {
+        latestEl.innerHTML =
+            '<span class="badge bg-secondary px-2">v' + d.latest_ver + '</span> ' +
+            '<span class="text-muted ms-1" style="font-size:0.82rem;">Up to date</span>';
+    } else if (d.error) {
+        latestEl.innerHTML = '<span class="text-muted" style="font-size:0.85rem;" title="' + d.error + '">Unable to check</span>';
+    }
+    if (lastEl && d.last_checked) lastEl.textContent = d.last_checked;
+}
+
+const olderEl = document.getElementById('older-changelog');
+if (olderEl) {
+    olderEl.addEventListener('show.bs.collapse', function () {
+        document.getElementById('older-changelog-btn').innerHTML = '<i class="bi bi-chevron-up me-1"></i>Hide older versions';
+    });
+    olderEl.addEventListener('hide.bs.collapse', function () {
+        document.getElementById('older-changelog-btn').innerHTML = '<i class="bi bi-chevron-down me-1"></i>Show older versions';
+    });
+}
+</script>
+{{end}}
