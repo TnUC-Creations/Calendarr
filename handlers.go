@@ -28,6 +28,15 @@ var faviconData []byte
 //go:embed assets/sidebar-logo.png
 var sidebarLogoData []byte
 
+//go:embed assets/sidebar-logo-v2.png
+var sidebarLogoV2Data []byte
+
+//go:embed assets/about-banner-dark.png
+var aboutBannerDarkData []byte
+
+//go:embed assets/about-banner-light.png
+var aboutBannerLightData []byte
+
 // ---- Flash messages (cookie-based) ------------------------------------------
 
 type FlashMsg struct {
@@ -646,9 +655,25 @@ func handleFavicon(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSidebarLogo(w http.ResponseWriter, r *http.Request) {
+	writePNG(w, sidebarLogoData)
+}
+
+func handleSidebarLogoV2(w http.ResponseWriter, r *http.Request) {
+	writePNG(w, sidebarLogoV2Data)
+}
+
+func handleAboutBannerDark(w http.ResponseWriter, r *http.Request) {
+	writePNG(w, aboutBannerDarkData)
+}
+
+func handleAboutBannerLight(w http.ResponseWriter, r *http.Request) {
+	writePNG(w, aboutBannerLightData)
+}
+
+func writePNG(w http.ResponseWriter, data []byte) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	w.Write(sidebarLogoData)
+	w.Write(data)
 }
 
 // ---- Template loading -------------------------------------------------------

@@ -18,7 +18,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.5.4"
+	appVersion = "1.5.5"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -250,6 +250,9 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/restore", handleRestore)
 	mux.HandleFunc("/favicon.ico", handleFavicon)
 	mux.HandleFunc("/assets/sidebar-logo.png", handleSidebarLogo)
+	mux.HandleFunc("/assets/sidebar-logo-v2.png", handleSidebarLogoV2)
+	mux.HandleFunc("/assets/about-banner-dark.png", handleAboutBannerDark)
+	mux.HandleFunc("/assets/about-banner-light.png", handleAboutBannerLight)
 
 	// JSON API
 	mux.HandleFunc("/api/status", apiStatus)
