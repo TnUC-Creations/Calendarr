@@ -156,7 +156,9 @@ func apiCleanup(w http.ResponseWriter, r *http.Request) {
 	}
 	setCleanupRunning()
 	cfg, _ := loadConfig()
-	go runCleanup(cfg, body.Mode)
+	go func() {
+		_, _ = runCleanup(cfg, body.Mode)
+	}()
 	jsonOK(w, map[string]interface{}{"ok": true, "started": true})
 }
 
@@ -167,14 +169,16 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		CalendarID string   `json:"calendar_id"`
+		Mode       string   `json:"mode"`
 		Sources    []string `json:"sources"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		adminLog("Target cleanup rejected", err.Error())
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
 	cfg, _ := loadConfig()
-	deletedMessages, scanned, deleted, err := cleanupTargetCalendar(cfg, body.CalendarID, body.Sources)
+	deletedMessages, scanned, deleted, err := cleanupTargetCalendar(cfg, body.CalendarID, body.Mode, body.Sources)
 	if err != nil {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error(), "scanned": scanned, "deleted": deleted})
 		return

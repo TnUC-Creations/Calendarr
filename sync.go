@@ -94,7 +94,7 @@ func shouldTrackRadarrRelease(cfg Config, releaseType string) bool {
 	}
 }
 
-func deleteRadarrEventsByKind(calSvc *calendar.Service, calendarID string, allEvents *[]*calendar.Event, cfg Config, kind string, dryRun bool) []string {
+func deleteRadarrEventsByKind(calSvc *calendar.Service, calendarID string, allEvents *[]*calendar.Event, cfg Config, kind string, dryRun bool) ([]string, error) {
 	var deleted []string
 	kept := (*allEvents)[:0]
 	for _, ev := range *allEvents {
@@ -106,6 +106,8 @@ func deleteRadarrEventsByKind(calSvc *calendar.Service, calendarID string, allEv
 		if !dryRun {
 			if err := calSvc.Events.Delete(calendarID, ev.Id).Do(); err == nil {
 				ok = true
+			} else {
+				return deleted, fmt.Errorf("delete %q from %s: %w", ev.Summary, calendarID, err)
 			}
 		}
 		if ok {
@@ -115,7 +117,7 @@ func deleteRadarrEventsByKind(calSvc *calendar.Service, calendarID string, allEv
 		kept = append(kept, ev)
 	}
 	*allEvents = kept
-	return deleted
+	return deleted, nil
 }
 
 func allDayCalendarEvent(summary, description, date, colorID string) *calendar.Event {
@@ -312,44 +314,131 @@ type SyncResult struct {
 	Deleted []string
 }
 
-// checkConnectivity verifies that all enabled services are reachable before
-// starting a sync. Errors are written to w and returned immediately.
-func checkConnectivity(cfg Config, w io.Writer) error {
+const (
+	syncPreflightAttempts = 3
+	syncPreflightDelay    = 10 * time.Second
+)
+
+func retryWithLog(w io.Writer, label string, attempts int, delay time.Duration, fn func() error) error {
+	if attempts <= 0 {
+		attempts = 1
+	}
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		fmt.Fprintf(w, "[Check] %s attempt %d/%d\n", label, attempt, attempts)
+		if err := fn(); err != nil {
+			lastErr = err
+			fmt.Fprintf(w, "[WARN] %s attempt %d/%d failed: %v\n", label, attempt, attempts, err)
+			if attempt < attempts {
+				fmt.Fprintf(w, "[Check] Retrying %s in %s\n", label, delay)
+				if delay > 0 {
+					time.Sleep(delay)
+				}
+			}
+			continue
+		}
+		fmt.Fprintf(w, "[OK] %s connected\n", label)
+		return nil
+	}
+	return fmt.Errorf("%s failed after %d attempt(s): %w", label, attempts, lastErr)
+}
+
+func checkHTTPStatus(client *http.Client, req *http.Request) error {
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// checkConnectivity verifies that all enabled services and calendar targets are
+// reachable before starting a sync. Temporary failures are retried first.
+func checkConnectivity(cfg Config, calSvc *calendar.Service, targets []CalendarTarget, w io.Writer) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	if cfg.UseRadarr {
-		req, _ := http.NewRequest("GET", cfg.RadarrURL+"/system/status", nil)
-		req.Header.Set("X-Api-Key", cfg.RadarrAPIKey)
-		resp, err := client.Do(req)
+		err := retryWithLog(w, "Radarr", syncPreflightAttempts, syncPreflightDelay, func() error {
+			req, _ := http.NewRequest("GET", cfg.RadarrURL+"/system/status", nil)
+			req.Header.Set("X-Api-Key", cfg.RadarrAPIKey)
+			return checkHTTPStatus(client, req)
+		})
 		if err != nil {
-			fmt.Fprintf(w, "[ERROR] Cannot reach Radarr at %s: %v\n", cfg.RadarrURL, err)
-			return fmt.Errorf("Radarr unreachable: %v", err)
+			fmt.Fprintf(w, "[ERROR] %v\n", err)
+			return err
 		}
-		resp.Body.Close()
-		if resp.StatusCode != 200 {
-			fmt.Fprintf(w, "[ERROR] Radarr returned HTTP %d — check URL and API key\n", resp.StatusCode)
-			return fmt.Errorf("Radarr returned HTTP %d", resp.StatusCode)
-		}
-		fmt.Fprintf(w, "[OK] Radarr connected\n")
 	}
 
 	if cfg.UseSonarr {
-		req, _ := http.NewRequest("GET", cfg.SonarrURL+"/system/status", nil)
-		req.Header.Set("X-Api-Key", cfg.SonarrAPIKey)
-		resp, err := client.Do(req)
+		err := retryWithLog(w, "Sonarr", syncPreflightAttempts, syncPreflightDelay, func() error {
+			req, _ := http.NewRequest("GET", cfg.SonarrURL+"/system/status", nil)
+			req.Header.Set("X-Api-Key", cfg.SonarrAPIKey)
+			return checkHTTPStatus(client, req)
+		})
 		if err != nil {
-			fmt.Fprintf(w, "[ERROR] Cannot reach Sonarr at %s: %v\n", cfg.SonarrURL, err)
-			return fmt.Errorf("Sonarr unreachable: %v", err)
+			fmt.Fprintf(w, "[ERROR] %v\n", err)
+			return err
 		}
-		resp.Body.Close()
-		if resp.StatusCode != 200 {
-			fmt.Fprintf(w, "[ERROR] Sonarr returned HTTP %d — check URL and API key\n", resp.StatusCode)
-			return fmt.Errorf("Sonarr returned HTTP %d", resp.StatusCode)
+	}
+
+	for _, target := range targets {
+		label := "Google Calendar"
+		if len(targets) > 1 {
+			name := target.Name
+			if name == "" {
+				name = target.ID
+			}
+			label += " [" + name + "]"
 		}
-		fmt.Fprintf(w, "[OK] Sonarr connected\n")
+		targetID := target.ID
+		err := retryWithLog(w, label, syncPreflightAttempts, syncPreflightDelay, func() error {
+			_, err := calSvc.Calendars.Get(targetID).Do()
+			return err
+		})
+		if err != nil {
+			fmt.Fprintf(w, "[ERROR] %v\n", err)
+			return err
+		}
 	}
 
 	return nil
+
+}
+
+func listCalendarEvents(calSvc *calendar.Service, calendarID string) ([]*calendar.Event, error) {
+	var events []*calendar.Event
+	var pageToken string
+	for {
+		call := calSvc.Events.List(calendarID).SingleEvents(true).MaxResults(2500)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		res, err := call.Do()
+		if err != nil {
+			return events, err
+		}
+		events = append(events, res.Items...)
+		pageToken = res.NextPageToken
+		if pageToken == "" {
+			return events, nil
+		}
+	}
+}
+
+func indexEventsBySummary(events []*calendar.Event) map[string]*calendar.Event {
+	index := make(map[string]*calendar.Event, len(events))
+	for _, ev := range events {
+		if ev == nil || ev.Summary == "" {
+			continue
+		}
+		if _, exists := index[ev.Summary]; !exists {
+			index[ev.Summary] = ev
+		}
+	}
+	return index
 }
 
 // runSync executes the full Radarr + Sonarr sync. Log lines are written to w.
@@ -367,17 +456,16 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		progress = setPreviewProgress
 	}
 
-	// Pre-flight: verify all configured services are reachable before doing any work.
-	if err := checkConnectivity(cfg, w); err != nil {
-		return result, err
-	}
-
 	calSvc, err := getCalService(cfg)
 	if err != nil {
 		fmt.Fprintf(w, "[ERROR] Google Calendar: %v\n", err)
 		return result, fmt.Errorf("calendar service: %w", err)
 	}
-	fmt.Fprintf(w, "[OK] Google Calendar connected\n")
+
+	// Pre-flight: verify all configured services are reachable before doing any work.
+	if err := checkConnectivity(cfg, calSvc, targets, w); err != nil {
+		return result, err
+	}
 
 	currentIgnored := loadIgnoredShows(dataPath(cfg.IgnoredShowsFile))
 	prevIgnored := loadPrevIgnored()
@@ -412,7 +500,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 
 	// deleteShowEvents removes all calendar events whose summary starts with title.
 	// Returns the number of events deleted. Only logs when events are actually removed.
-	deleteShowEvents := func(title string) int {
+	deleteShowEvents := func(title string) (int, error) {
 		removedCount := 0
 		for _, target := range targets {
 			var pageToken string
@@ -425,7 +513,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 				res, err := call.Do()
 				if err != nil {
 					fmt.Fprintf(w, "[Cleanup] Error listing events for %q on %s: %v\n", title, target.ID, err)
-					break
+					return removedCount, fmt.Errorf("cleanup list events for %q on %s: %w", title, target.ID, err)
 				}
 				for _, ev := range res.Items {
 					if strings.HasPrefix(ev.Summary, title) {
@@ -433,6 +521,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 						if !dryRun {
 							if err := calSvc.Events.Delete(target.ID, ev.Id).Do(); err != nil {
 								fmt.Fprintf(w, "[Cleanup] Error deleting %q: %v\n", ev.Summary, err)
+								return removedCount, fmt.Errorf("cleanup delete %q: %w", ev.Summary, err)
 							} else {
 								ok = true
 							}
@@ -451,7 +540,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 				}
 			}
 		}
-		return removedCount
+		return removedCount, nil
 	}
 
 	// ---- Radarr ----------------------------------------------------------------
@@ -463,10 +552,19 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			fmt.Fprintf(w, "Radarr error: %v\n", err)
+			return result, fmt.Errorf("Radarr movie fetch: %w", err)
 		} else {
+			if resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				err := fmt.Errorf("Radarr movie fetch returned HTTP %d", resp.StatusCode)
+				fmt.Fprintf(w, "[ERROR] %v\n", err)
+				return result, err
+			}
 			var movies []map[string]interface{}
 			if err := json.NewDecoder(resp.Body).Decode(&movies); err != nil {
 				fmt.Fprintf(w, "[ERROR] Failed to parse Radarr response: %v\n", err)
+				resp.Body.Close()
+				return result, err
 			}
 			resp.Body.Close()
 
@@ -480,14 +578,17 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 			radarrTargets := calendarTargetsForSource(targets, "radarr")
 
 			for _, target := range radarrTargets {
-				allEventsRes, err := calSvc.Events.List(target.ID).
-					SingleEvents(true).MaxResults(2500).Do()
-				allEvents := []*calendar.Event{}
-				if err == nil {
-					allEvents = allEventsRes.Items
+				allEvents, err := listCalendarEvents(calSvc, target.ID)
+				if err != nil {
+					fmt.Fprintf(w, "[ERROR] Failed to load existing Radarr calendar events for %s: %v\n", target.ID, err)
+					return result, fmt.Errorf("load existing Radarr events for %s: %w", target.ID, err)
 				}
 				if !cfg.RadarrTrackTheater {
-					deleted := deleteRadarrEventsByKind(calSvc, target.ID, &allEvents, cfg, "radarr_theater", dryRun)
+					deleted, err := deleteRadarrEventsByKind(calSvc, target.ID, &allEvents, cfg, "radarr_theater", dryRun)
+					if err != nil {
+						fmt.Fprintf(w, "[ERROR] Failed deleting disabled theater events for %s: %v\n", target.ID, err)
+						return result, err
+					}
 					for _, msg := range deleted {
 						msg += targetLabel(target, multiTarget)
 						result.Deleted = append(result.Deleted, msg)
@@ -495,13 +596,18 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 					}
 				}
 				if !cfg.RadarrTrackDigital {
-					deleted := deleteRadarrEventsByKind(calSvc, target.ID, &allEvents, cfg, "radarr_digital", dryRun)
+					deleted, err := deleteRadarrEventsByKind(calSvc, target.ID, &allEvents, cfg, "radarr_digital", dryRun)
+					if err != nil {
+						fmt.Fprintf(w, "[ERROR] Failed deleting disabled digital events for %s: %v\n", target.ID, err)
+						return result, err
+					}
 					for _, msg := range deleted {
 						msg += targetLabel(target, multiTarget)
 						result.Deleted = append(result.Deleted, msg)
 						fmt.Fprintf(w, "[Radarr] Deleted disabled digital event: %s\n", msg)
 					}
 				}
+				existingMovieEvents := indexEventsBySummary(allEvents)
 
 				for _, movie := range movies {
 					if hasFile, _ := movie["hasFile"].(bool); hasFile {
@@ -519,25 +625,19 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 
 					overview, _ := movie["overview"].(string)
 
-					processMovieDate := func(dateStr, tmplStr string, offset int) {
+					processMovieDate := func(dateStr, tmplStr string, offset int) error {
 						rd, ok := localDateFromAPI(dateStr)
 						if !ok {
-							return
+							return nil
 						}
 						rd = applyDayOffset(rd, offset)
 						t, err := time.Parse("2006-01-02", rd)
 						if err != nil || !t.After(today) {
-							return
+							return nil
 						}
 						summary := fmtMovieTitle(tmplStr, title)
 						ev := allDayCalendarEvent(summary, overview, rd, target.RadarrColorID)
-						var existing *calendar.Event
-						for _, e := range allEvents {
-							if e.Summary == summary {
-								existing = e
-								break
-							}
-						}
+						existing := existingMovieEvents[summary]
 						if existing == nil {
 							msg := fmt.Sprintf("%s on %s%s", summary, rd, targetLabel(target, multiTarget))
 							ok := dryRun
@@ -545,10 +645,13 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								inserted, e2 := calSvc.Events.Insert(target.ID, ev).Do()
 								ok = e2 == nil
 								if ok {
-									allEvents = append(allEvents, inserted)
+									existingMovieEvents[summary] = inserted
+								} else {
+									fmt.Fprintf(w, "[ERROR] Failed adding %s: %v\n", msg, e2)
+									return e2
 								}
 							} else {
-								allEvents = append(allEvents, ev)
+								existingMovieEvents[summary] = ev
 							}
 							if ok {
 								result.Added = append(result.Added, msg)
@@ -561,26 +664,34 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								updated, e2 := calSvc.Events.Update(target.ID, existing.Id, ev).Do()
 								ok = e2 == nil
 								if ok {
-									*existing = *updated
+									existingMovieEvents[summary] = updated
+								} else {
+									fmt.Fprintf(w, "[ERROR] Failed updating %s: %v\n", msg, e2)
+									return e2
 								}
 							} else {
-								*existing = *ev
+								existingMovieEvents[summary] = ev
 							}
 							if ok {
 								result.Updated = append(result.Updated, msg)
 								fmt.Fprintf(w, "Updated: %s\n", msg)
 							}
 						}
+						return nil
 					}
 
 					if shouldTrackRadarrRelease(cfg, "theater") {
 						if v, ok := movie["inCinemas"].(string); ok {
-							processMovieDate(v, cfg.MovieTheaterTemplate, cfg.RadarrTheaterDayOffset)
+							if err := processMovieDate(v, cfg.MovieTheaterTemplate, cfg.RadarrTheaterDayOffset); err != nil {
+								return result, err
+							}
 						}
 					}
 					if shouldTrackRadarrRelease(cfg, "digital") {
 						digitalDate := radarrDigitalReleaseDate(movie)
-						processMovieDate(digitalDate, cfg.MovieDigitalTemplate, cfg.RadarrDigitalDayOffset)
+						if err := processMovieDate(digitalDate, cfg.MovieDigitalTemplate, cfg.RadarrDigitalDayOffset); err != nil {
+							return result, err
+						}
 					}
 					if len(result.Added)+len(result.Updated) == addedBefore+updatedBefore {
 						radarrNoFutureDates++
@@ -607,10 +718,19 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			fmt.Fprintf(w, "Sonarr error fetching series: %v\n", err)
+			return result, fmt.Errorf("Sonarr series fetch: %w", err)
 		} else {
+			if resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				err := fmt.Errorf("Sonarr series fetch returned HTTP %d", resp.StatusCode)
+				fmt.Fprintf(w, "[ERROR] %v\n", err)
+				return result, err
+			}
 			var shows []map[string]interface{}
 			if err := json.NewDecoder(resp.Body).Decode(&shows); err != nil {
 				fmt.Fprintf(w, "[ERROR] Failed to parse Sonarr series response: %v\n", err)
+				resp.Body.Close()
+				return result, err
 			}
 			resp.Body.Close()
 
@@ -622,12 +742,22 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 			calEp.Header.Set("X-Api-Key", cfg.SonarrAPIKey)
 			epResp, err := httpClient.Do(calEp)
 			var allEpisodes []map[string]interface{}
-			if err == nil {
-				if decErr := json.NewDecoder(epResp.Body).Decode(&allEpisodes); decErr != nil {
-					fmt.Fprintf(w, "[ERROR] Failed to parse Sonarr episode response: %v\n", decErr)
-				}
-				epResp.Body.Close()
+			if err != nil {
+				fmt.Fprintf(w, "Sonarr error fetching calendar: %v\n", err)
+				return result, fmt.Errorf("Sonarr calendar fetch: %w", err)
 			}
+			if epResp.StatusCode != http.StatusOK {
+				epResp.Body.Close()
+				err := fmt.Errorf("Sonarr calendar fetch returned HTTP %d", epResp.StatusCode)
+				fmt.Fprintf(w, "[ERROR] %v\n", err)
+				return result, err
+			}
+			if decErr := json.NewDecoder(epResp.Body).Decode(&allEpisodes); decErr != nil {
+				fmt.Fprintf(w, "[ERROR] Failed to parse Sonarr episode response: %v\n", decErr)
+				epResp.Body.Close()
+				return result, decErr
+			}
+			epResp.Body.Close()
 
 			now := time.Now().UTC()
 
@@ -637,14 +767,12 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 
 				// Load all existing calendar events once for O(1) episode existence
 				// checks instead of calling the Calendar API for every episode.
-				existingEpRes, _ := calSvc.Events.List(target.ID).
-					SingleEvents(true).MaxResults(2500).Do()
-				existingEpEvents := make(map[string]*calendar.Event)
-				if existingEpRes != nil {
-					for _, e := range existingEpRes.Items {
-						existingEpEvents[e.Summary] = e
-					}
+				existingEvents, err := listCalendarEvents(calSvc, target.ID)
+				if err != nil {
+					fmt.Fprintf(w, "[ERROR] Failed to load existing Sonarr calendar events for %s: %v\n", target.ID, err)
+					return result, fmt.Errorf("load existing Sonarr events for %s: %w", target.ID, err)
 				}
+				existingEpEvents := indexEventsBySummary(existingEvents)
 
 				fmt.Fprintf(w, "[Sonarr] %d show(s), %d upcoming episode(s) in next 365 days\n",
 					len(shows), len(allEpisodes))
@@ -701,6 +829,9 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								ok = e2 == nil
 								if ok {
 									existingEpEvents[summary] = inserted
+								} else {
+									fmt.Fprintf(w, "[ERROR] Failed adding %s: %v\n", msg, e2)
+									return result, e2
 								}
 							} else {
 								existingEpEvents[summary] = ev
@@ -718,6 +849,9 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								ok = e2 == nil
 								if ok {
 									existingEpEvents[summary] = updated
+								} else {
+									fmt.Fprintf(w, "[ERROR] Failed updating %s: %v\n", msg, e2)
+									return result, e2
 								}
 							} else {
 								existingEpEvents[summary] = ev
@@ -759,7 +893,10 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		sort.Strings(cleanupTitles)
 		cleanShowCount, dirtyShowCount, totalRemoved := 0, 0, 0
 		for _, title := range cleanupTitles {
-			n := deleteShowEvents(title)
+			n, err := deleteShowEvents(title)
+			if err != nil {
+				return result, err
+			}
 			totalRemoved += n
 			if n > 0 {
 				dirtyShowCount++

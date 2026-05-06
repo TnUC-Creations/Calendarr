@@ -18,7 +18,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.5.5"
+	appVersion = "1.5.6"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -128,16 +128,24 @@ func syncWorker() {
 		Updated: len(result.Updated),
 		Deleted: len(result.Deleted),
 	}
-	finishRun(runTime, status, changes, stats)
 
 	// Auto-cleanup: remove past Calendarr events after a successful sync.
 	var cleanupDeleted []string
 	if cfg.AutoCleanupPast && !strings.Contains(status, "Error") {
-		cleanupDeleted = runCleanup(cfg, "past")
+		var cleanupErr error
+		cleanupDeleted, cleanupErr = runCleanup(cfg, "past")
 		if len(cleanupDeleted) > 0 {
-			mergeCleanupIntoLastRun(len(cleanupDeleted), cleanupDeleted)
+			stats.Deleted += len(cleanupDeleted)
+			for _, m := range cleanupDeleted {
+				changes = append(changes, RunChange{Action: "deleted", Message: m})
+			}
+		}
+		if cleanupErr != nil {
+			status = fmt.Sprintf("Error: %v", cleanupErr)
+			fmt.Fprintf(&buf, "[ERROR] Auto-cleanup failed: %v\n", cleanupErr)
 		}
 	}
+	finishRun(runTime, status, changes, stats)
 
 	// Log Pushover decisions and send — written to buf so they appear in the log file.
 	if cfg.UsePushover && cfg.PushoverToken != "" && cfg.PushoverUser != "" {

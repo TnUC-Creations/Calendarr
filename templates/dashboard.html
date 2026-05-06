@@ -1,4 +1,17 @@
 {{define "content"}}
+<style>
+    #progress-line,
+    #last-status {
+        overflow-wrap:anywhere;
+        word-break:break-word;
+    }
+    #last-status {
+        display:inline-block;
+        max-width:100%;
+        vertical-align:top;
+    }
+</style>
+
 <div class="d-flex align-items-center justify-content-between mb-4 pb-3" style="border-bottom:1px solid var(--border);">
     <h2 class="mb-0" style="font-size:1.4rem; font-weight:600; color:var(--text); display:flex; align-items:center; gap:0.5rem;">
         <i class="bi bi-speedometer2"></i> Dashboard
@@ -32,7 +45,7 @@
                     </tr>
                     <tr>
                         <td class="text-muted ps-0">Result</td>
-                        <td>
+                        <td style="min-width:0; max-width:0; overflow-wrap:anywhere; word-break:break-word;">
                             <span class="status-dot {{.StatusDotClass}}"></span>
                             <span id="last-status">{{.LastRunStatus}}</span>
                         </td>
@@ -193,6 +206,10 @@
                 <p id="cleanup-all-warning" class="text-warning d-none mb-2" style="font-size:0.88rem;">
                     <i class="bi bi-exclamation-triangle-fill"></i> <strong>All</strong> mode removes both past and future Calendarr events.
                 </p>
+                <div id="cleanup-calendar-picker" class="d-none mb-3">
+                    <p class="mb-2 fw-semibold">Choose calendar</p>
+                    <div id="cleanup-calendar-options" class="list-group"></div>
+                </div>
                 <p class="text-muted mb-0" style="font-size:0.85rem;">Other events on your calendar are not affected.</p>
             </div>
             <div class="modal-footer" style="border-color:var(--border);">
@@ -422,9 +439,53 @@ function applyPreviewChanges() {
 // ---- Cleanup ----------------------------------------------------------------
 
 let currentCleanupMode = 'past';
+let currentCleanupCalendarID = '';
 
 const CLEANUP_LABELS = { past: 'past', future: 'future', all: 'all' };
 const CLEANUP_TITLES = { past: 'Past Events', future: 'Future Events', all: 'All Events' };
+const CLEANUP_TARGETS = [
+    {{range .Config.CalendarTargets}}
+    {id: {{.ID}}, name: {{.Name}}},
+    {{end}}
+];
+
+function cleanupTargetName(target) {
+    return target.name || target.id;
+}
+
+function renderCleanupCalendarOptions() {
+    const picker = document.getElementById('cleanup-calendar-picker');
+    const options = document.getElementById('cleanup-calendar-options');
+    const btn = document.getElementById('cleanup-btn');
+    if (!picker || !options || !btn) return;
+    if (CLEANUP_TARGETS.length <= 1) {
+        picker.classList.add('d-none');
+        currentCleanupCalendarID = '';
+        btn.disabled = false;
+        return;
+    }
+    picker.classList.remove('d-none');
+    currentCleanupCalendarID = '';
+    btn.disabled = true;
+    options.innerHTML = '';
+    CLEANUP_TARGETS.forEach(target => {
+        const name = escHtml(cleanupTargetName(target));
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center cleanup-calendar-option';
+        option.innerHTML = `
+            <span><i class="bi bi-calendar3 me-2"></i>${name}</span>
+            <span class="text-muted" style="font-size:0.78rem;">Select</span>
+        `;
+        option.addEventListener('click', () => {
+            currentCleanupCalendarID = target.id || '';
+            options.querySelectorAll('.cleanup-calendar-option').forEach(opt => opt.classList.remove('active'));
+            option.classList.add('active');
+            btn.disabled = false;
+        });
+        options.appendChild(option);
+    });
+}
 
 function prepareCleanup(mode) {
     const trigger = document.getElementById('cleanup-trigger');
@@ -434,6 +495,9 @@ function prepareCleanup(mode) {
     document.querySelector('#cleanupModal .modal-title').innerHTML =
         '<i class="bi bi-trash3 text-danger"></i> Clean Up ' + CLEANUP_TITLES[mode];
     document.getElementById('cleanup-all-warning').classList.toggle('d-none', mode !== 'all');
+    document.getElementById('cleanup-btn').innerHTML =
+        '<i class="bi bi-trash3"></i> Delete ' + CLEANUP_TITLES[mode];
+    renderCleanupCalendarOptions();
     bootstrap.Modal.getOrCreateInstance(document.getElementById('cleanupModal')).show();
 }
 
@@ -470,21 +534,35 @@ function pollCleanup() {
 function runCleanup() {
     const trigger = document.getElementById('cleanup-trigger');
     const modalBtn = document.getElementById('cleanup-btn');
+    const multiTarget = CLEANUP_TARGETS.length > 1;
+    if (multiTarget && !currentCleanupCalendarID) {
+        showPageAlert('danger', 'Choose a calendar first.');
+        return;
+    }
+
     bootstrap.Modal.getInstance(document.getElementById('cleanupModal')).hide();
     setCleanupRunning(trigger);
     modalBtn.disabled = true;
     modalBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Starting...';
 
-    csrfFetch('/api/cleanup', {
+    const url = multiTarget ? '/api/cleanup/target' : '/api/cleanup';
+    const body = multiTarget
+        ? {mode: currentCleanupMode, calendar_id: currentCleanupCalendarID}
+        : {mode: currentCleanupMode};
+
+    csrfFetch(url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({mode: currentCleanupMode})
+        body: JSON.stringify(body)
     })
         .then(r => r.json())
         .then(data => {
             modalBtn.disabled = false;
             modalBtn.innerHTML = '<i class="bi bi-trash3"></i> Delete Events';
-            if (data.started) {
+            if (multiTarget && data.ok) {
+                setCleanupIdle(trigger);
+                showPageAlert('success', `Done. Scanned ${data.scanned.toLocaleString()} events, deleted ${data.deleted.toLocaleString()}.`);
+            } else if (data.started) {
                 pollCleanup();
             } else {
                 setCleanupIdle(trigger);

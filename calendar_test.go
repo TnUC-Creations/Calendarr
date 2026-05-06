@@ -25,6 +25,23 @@ func TestCleanupEventSourceClassifiesConfiguredEvents(t *testing.T) {
 	}
 }
 
+func TestNormalizeCleanupMode(t *testing.T) {
+	tests := map[string]string{
+		"":       "past",
+		"past":   "past",
+		"future": "future",
+		"all":    "all",
+		"bad":    "past",
+		" ALL ":  "all",
+	}
+
+	for input, want := range tests {
+		if got := normalizeCleanupMode(input); got != want {
+			t.Fatalf("normalizeCleanupMode(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestCleanupEventKindClassifiesRadarrSubtypes(t *testing.T) {
 	cfg := defaultConfig()
 

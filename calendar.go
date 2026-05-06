@@ -90,22 +90,54 @@ func sourceSet(sources []string) map[string]struct{} {
 	return set
 }
 
+func normalizeCleanupMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "future":
+		return "future"
+	case "all":
+		return "all"
+	default:
+		return "past"
+	}
+}
+
+func cleanupModeLabel(mode string) string {
+	switch normalizeCleanupMode(mode) {
+	case "future":
+		return "Future events"
+	case "all":
+		return "All events"
+	default:
+		return "Past events"
+	}
+}
+
+func cleanupTargetLogName(cfg Config, calendarID string) string {
+	for _, target := range calendarTargets(cfg) {
+		if strings.EqualFold(target.ID, calendarID) {
+			if target.Name != "" {
+				return fmt.Sprintf("%s (%s)", target.Name, target.ID)
+			}
+			return target.ID
+		}
+	}
+	return calendarID
+}
+
+func cleanupTodayRFC3339() string {
+	now := time.Now()
+	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return todayMidnight.Format(time.RFC3339)
+}
+
 // ---- Cleanup worker ---------------------------------------------------------
 
 // runCleanup runs as a goroutine. mode is "past", "future", or "all".
 // Returns the list of deleted event messages so callers can merge them into
 // dashboard stats (auto-cleanup path). Goroutine callers safely discard it.
-func runCleanup(cfg Config, mode string) []string {
-	modeLabels := map[string]string{
-		"past":   "Past events",
-		"future": "Future events",
-		"all":    "All events",
-	}
-	label := modeLabels[mode]
-	if label == "" {
-		label = "Past events"
-		mode = "past"
-	}
+func runCleanup(cfg Config, mode string) ([]string, error) {
+	mode = normalizeCleanupMode(mode)
+	label := cleanupModeLabel(mode)
 
 	targets := calendarTargets(cfg)
 	multiTarget := len(targets) > 1
@@ -117,12 +149,10 @@ func runCleanup(cfg Config, mode string) []string {
 		msg := fmt.Sprintf("Cleanup error: %v", err)
 		adminLog(msg, "")
 		finishCleanup(false, 0, 0, msg)
-		return nil
+		return nil, err
 	}
 
-	now := time.Now()
-	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	today := todayMidnight.Format(time.RFC3339)
+	today := cleanupTodayRFC3339()
 	var deleted, scanned int
 	var deletedMessages []string
 
@@ -147,7 +177,7 @@ func runCleanup(cfg Config, mode string) []string {
 				adminLog(msg, "")
 				flushCleanupHistory(deletedMessages)
 				finishCleanup(false, scanned, deleted, fmt.Sprintf("Cleanup error after %d deletions: %v", deleted, err))
-				return deletedMessages
+				return deletedMessages, err
 			}
 
 			for _, ev := range res.Items {
@@ -157,15 +187,20 @@ func runCleanup(cfg Config, mode string) []string {
 					continue
 				}
 				if cleanupEventSource(s, cfg) != "" {
-					if err := calSvc.Events.Delete(target.ID, ev.Id).Do(); err == nil {
-						deleted++
-						deletedMsg := s + " removed from calendar" + targetLabel(target, multiTarget)
-						deletedMessages = append(deletedMessages, deletedMsg)
-						ts := time.Now().Format("2006-01-02 15:04:05")
-						if f, err2 := os.OpenFile(currentLogFile(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-							fmt.Fprintf(f, "%s [Cleanup] Deleted: %s%s\n", ts, s, targetLabel(target, multiTarget))
-							f.Close()
-						}
+					if err := calSvc.Events.Delete(target.ID, ev.Id).Do(); err != nil {
+						msg := fmt.Sprintf("Cleanup delete error after %d deletions: %v", deleted, err)
+						adminLog(msg, "")
+						flushCleanupHistory(deletedMessages)
+						finishCleanup(false, scanned, deleted, msg)
+						return deletedMessages, err
+					}
+					deleted++
+					deletedMsg := s + " removed from calendar" + targetLabel(target, multiTarget)
+					deletedMessages = append(deletedMessages, deletedMsg)
+					ts := time.Now().Format("2006-01-02 15:04:05")
+					if f, err2 := os.OpenFile(currentLogFile(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+						fmt.Fprintf(f, "%s [Cleanup] Deleted: %s%s\n", ts, s, targetLabel(target, multiTarget))
+						f.Close()
 					}
 				}
 				updateCleanupProgress(scanned, deleted)
@@ -182,7 +217,7 @@ func runCleanup(cfg Config, mode string) []string {
 	msg := fmt.Sprintf("Done. Scanned %d events, deleted %d.", scanned, deleted)
 	adminLog(fmt.Sprintf("%s cleanup finished: scanned %d, deleted %d", label, scanned, deleted), "")
 	finishCleanup(true, scanned, deleted, msg)
-	return deletedMessages
+	return deletedMessages, nil
 }
 
 // flushCleanupHistory writes deleted event entries to history in one batch.
@@ -207,9 +242,7 @@ func simulateCleanup(cfg Config) []string {
 	if err != nil {
 		return nil
 	}
-	now := time.Now()
-	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	today := todayMidnight.Format(time.RFC3339)
+	today := cleanupTodayRFC3339()
 
 	var wouldDelete []string
 	for _, target := range targets {
@@ -242,16 +275,28 @@ func simulateCleanup(cfg Config) []string {
 	return wouldDelete
 }
 
-func cleanupTargetCalendar(cfg Config, calendarID string, sources []string) ([]string, int, int, error) {
+func cleanupTargetCalendar(cfg Config, calendarID, mode string, sources []string) ([]string, int, int, error) {
 	calendarID = strings.TrimSpace(calendarID)
+	mode = normalizeCleanupMode(mode)
+	label := cleanupModeLabel(mode)
+	sourceDetail := strings.Join(sources, ", ")
+	if sourceDetail == "" {
+		sourceDetail = "radarr, sonarr"
+	}
 	if calendarID == "" {
+		adminLog(label+" target cleanup failed", "missing calendar ID")
 		return nil, 0, 0, fmt.Errorf("calendar ID is required")
 	}
+	targetName := cleanupTargetLogName(cfg, calendarID)
+	adminLog(fmt.Sprintf("%s target cleanup started: calendar %s", label, targetName), sourceDetail)
+
 	calSvc, err := getCalService(cfg)
 	if err != nil {
+		adminLog(fmt.Sprintf("%s target cleanup failed: calendar %s: %v", label, targetName, err), sourceDetail)
 		return nil, 0, 0, err
 	}
 	wantedSources := sourceSet(sources)
+	today := cleanupTodayRFC3339()
 	var deletedMessages []string
 	var scanned, deleted int
 	var pageToken string
@@ -261,8 +306,15 @@ func cleanupTargetCalendar(cfg Config, calendarID string, sources []string) ([]s
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
+		switch mode {
+		case "past":
+			call = call.TimeMax(today)
+		case "future":
+			call = call.TimeMin(today)
+		}
 		res, err := call.Do()
 		if err != nil {
+			adminLog(fmt.Sprintf("%s target cleanup failed: calendar %s, scanned %d, deleted %d: %v", label, targetName, scanned, deleted, err), sourceDetail)
 			return deletedMessages, scanned, deleted, err
 		}
 		for _, ev := range res.Items {
@@ -274,10 +326,12 @@ func cleanupTargetCalendar(cfg Config, calendarID string, sources []string) ([]s
 			if _, ok := wantedSources[source]; !ok {
 				continue
 			}
-			if err := calSvc.Events.Delete(calendarID, ev.Id).Do(); err == nil {
-				deleted++
-				deletedMessages = append(deletedMessages, ev.Summary+" removed from calendar")
+			if err := calSvc.Events.Delete(calendarID, ev.Id).Do(); err != nil {
+				adminLog(fmt.Sprintf("%s target cleanup failed deleting %q from calendar %s after %d deletions: %v", label, ev.Summary, targetName, deleted, err), sourceDetail)
+				return deletedMessages, scanned, deleted, err
 			}
+			deleted++
+			deletedMessages = append(deletedMessages, ev.Summary+" removed from calendar")
 		}
 		pageToken = res.NextPageToken
 		if pageToken == "" {
@@ -285,7 +339,7 @@ func cleanupTargetCalendar(cfg Config, calendarID string, sources []string) ([]s
 		}
 	}
 	flushCleanupHistory(deletedMessages)
-	adminLog(fmt.Sprintf("Target cleanup finished: calendar %s, scanned %d, deleted %d", calendarID, scanned, deleted), strings.Join(sources, ", "))
+	adminLog(fmt.Sprintf("%s target cleanup finished: calendar %s, scanned %d, deleted %d", label, targetName, scanned, deleted), sourceDetail)
 	return deletedMessages, scanned, deleted, nil
 }
 

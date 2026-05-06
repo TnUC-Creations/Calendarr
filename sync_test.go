@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"strings"
 	"testing"
 
 	"google.golang.org/api/calendar/v3"
@@ -81,7 +84,10 @@ func TestDeleteRadarrEventsByKindDryRun(t *testing.T) {
 		{Summary: "Show S01E01"},
 	}
 
-	deleted := deleteRadarrEventsByKind(nil, "primary", &events, cfg, "radarr_digital", true)
+	deleted, err := deleteRadarrEventsByKind(nil, "primary", &events, cfg, "radarr_digital", true)
+	if err != nil {
+		t.Fatalf("deleteRadarrEventsByKind returned error: %v", err)
+	}
 
 	if len(deleted) != 1 || deleted[0] != "Movie Digital Release removed from calendar" {
 		t.Fatalf("deleted = %#v, want one digital deletion", deleted)
@@ -93,6 +99,68 @@ func TestDeleteRadarrEventsByKindDryRun(t *testing.T) {
 		if ev.Summary == "Movie Digital Release" {
 			t.Fatal("digital event should have been removed from event cache")
 		}
+	}
+}
+
+func TestRetryWithLogSucceedsAfterTransientFailures(t *testing.T) {
+	var buf bytes.Buffer
+	attempts := 0
+
+	err := retryWithLog(&buf, "Test API", 3, 0, func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New("temporary outage")
+		}
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("retryWithLog returned error: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+	log := buf.String()
+	if !strings.Contains(log, "Test API attempt 1/3 failed") || !strings.Contains(log, "[OK] Test API connected") {
+		t.Fatalf("log output missing retry details:\n%s", log)
+	}
+}
+
+func TestRetryWithLogFailsAfterAttempts(t *testing.T) {
+	var buf bytes.Buffer
+	attempts := 0
+
+	err := retryWithLog(&buf, "Test API", 3, 0, func() error {
+		attempts++
+		return errors.New("still down")
+	})
+
+	if err == nil {
+		t.Fatal("expected final error")
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+	if !strings.Contains(err.Error(), "failed after 3 attempt") {
+		t.Fatalf("error = %q, want failed attempts message", err)
+	}
+}
+
+func TestIndexEventsBySummaryKeepsFirstEvent(t *testing.T) {
+	first := &calendar.Event{Id: "first", Summary: "Movie Theater Release"}
+	second := &calendar.Event{Id: "second", Summary: "Movie Theater Release"}
+	index := indexEventsBySummary([]*calendar.Event{
+		nil,
+		{Id: "blank"},
+		first,
+		second,
+	})
+
+	if got := index["Movie Theater Release"]; got != first {
+		t.Fatalf("indexed event = %#v, want first duplicate", got)
+	}
+	if _, ok := index[""]; ok {
+		t.Fatal("blank summary should not be indexed")
 	}
 }
 
