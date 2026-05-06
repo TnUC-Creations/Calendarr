@@ -114,13 +114,25 @@ Release build:
 
 The release build script reads the local ignored `release_secret.txt`, injects it only for the build, restores the public-safe placeholder in source, and generates the updater checksum. Create `release_secret.txt` locally with the Google OAuth client secret before building releases. Do not commit that file.
 
+Installer release build:
+
+```powershell
+.\build_release.ps1 -BuildInstaller
+```
+
+The installer build uses Inno Setup and produces `calendarr-setup-<version>.exe`. It includes the Calendarr icon, branded setup artwork, and an optional desktop shortcut checkbox. Normal in-app updater releases still only need `calendarr.exe` and `calendarr.exe.sha256`.
+
 For development builds that do not need embedded OAuth:
 
 ```powershell
 go build -trimpath -o calendarr.exe .
 ```
 
-Installer builds use `calendarr.iss` with Inno Setup.
+If the app icon artwork changes, regenerate the Windows resource file before building:
+
+```powershell
+go run github.com/akavel/rsrc@latest -ico installer\calendarr.ico -o rsrc_windows.syso
+```
 
 ## Contributing
 

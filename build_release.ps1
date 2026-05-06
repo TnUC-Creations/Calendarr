@@ -1,6 +1,7 @@
 param(
     [string]$SecretFile = "release_secret.txt",
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$BuildInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +11,7 @@ $authPath = Join-Path $repoRoot "auth.go"
 $exePath = Join-Path $repoRoot "calendarr.exe"
 $checksumPath = Join-Path $repoRoot "calendarr.exe.sha256"
 $secretPath = Join-Path $repoRoot $SecretFile
+$installerScriptPath = Join-Path $repoRoot "calendarr.iss"
 $placeholder = "REPLACE_WITH_RELEASE_GOOGLE_CLIENT_SECRET"
 
 if (-not (Test-Path -LiteralPath $secretPath)) {
@@ -40,6 +42,15 @@ try {
         Get-FileHash -Algorithm SHA256 $exePath |
             ForEach-Object { "$($_.Hash.ToLower())  calendarr.exe" } |
             Set-Content -LiteralPath $checksumPath -NoNewline
+
+        if ($BuildInstaller) {
+            $iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
+            $isccPath = if ($iscc) { $iscc.Source } else { "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+            if (-not (Test-Path -LiteralPath $isccPath)) {
+                throw "ISCC.exe was not found. Install Inno Setup 6 or add ISCC.exe to PATH."
+            }
+            & $isccPath $installerScriptPath
+        }
     }
     finally {
         Pop-Location
@@ -54,4 +65,8 @@ if ($postBuildAuth -notlike "*$placeholder*") {
     throw "auth.go was not restored to the placeholder."
 }
 
-Write-Host "Built calendarr.exe and calendarr.exe.sha256."
+if ($BuildInstaller) {
+    Write-Host "Built calendarr.exe, calendarr.exe.sha256, and the installer."
+} else {
+    Write-Host "Built calendarr.exe and calendarr.exe.sha256."
+}
