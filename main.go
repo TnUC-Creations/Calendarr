@@ -18,7 +18,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.5.7"
+	appVersion = "1.5.8"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )

@@ -150,6 +150,10 @@ Pull requests should keep changes focused, include testing notes, and avoid comm
 
 Calendarr is currently focused on Windows service support. Planned ideas include multi-calendar improvements, deeper event customization, a first-time setup wizard, and Linux support later.
 
+## Support
+
+If Calendarr saves you time and you want to say thanks, a coffee is always appreciated: [paypal.me/jefabell](https://paypal.me/jefabell)
+
 ## License
 
 Calendarr is released under the MIT License. See [LICENSE](LICENSE) for details.
