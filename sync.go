@@ -459,11 +459,13 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 	calSvc, err := getCalService(cfg)
 	if err != nil {
 		fmt.Fprintf(w, "[ERROR] Google Calendar: %v\n", err)
+		fmt.Fprintf(w, "[Sync] Pre-flight failed — aborting\n")
 		return result, fmt.Errorf("calendar service: %w", err)
 	}
 
 	// Pre-flight: verify all configured services are reachable before doing any work.
 	if err := checkConnectivity(cfg, calSvc, targets, w); err != nil {
+		fmt.Fprintf(w, "[Sync] Pre-flight failed — aborting\n")
 		return result, err
 	}
 
@@ -487,7 +489,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 			ignoredTitles = append(ignoredTitles, t)
 		}
 		sort.Strings(ignoredTitles)
-		fmt.Fprintf(w, "[Sync] Ignored shows (%d): %s\n", len(currentIgnored), strings.Join(ignoredTitles, ", "))
+		fmt.Fprintf(w, "[Sync] Ignored shows (%d): %s\n", len(currentIgnored), compactNames(ignoredTitles, 10, len(ignoredTitles)))
 	}
 	if len(newlyIgnored) > 0 {
 		newTitles := make([]string, 0, len(newlyIgnored))
@@ -495,7 +497,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 			newTitles = append(newTitles, t)
 		}
 		sort.Strings(newTitles)
-		fmt.Fprintf(w, "[Sync] Newly ignored this run (%d): %s\n", len(newlyIgnored), strings.Join(newTitles, ", "))
+		fmt.Fprintf(w, "[Sync] Newly ignored this run (%d): %s\n", len(newlyIgnored), compactNames(newTitles, 10, len(newTitles)))
 	}
 
 	// deleteShowEvents removes all calendar events whose summary starts with title.
@@ -545,13 +547,15 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 
 	// ---- Radarr ----------------------------------------------------------------
 	if cfg.UseRadarr {
+		radarrStart := time.Now()
+		fmt.Fprintf(w, "[Sync] Starting Radarr phase...\n")
 		progress("Fetching Radarr movies...")
 		httpClient := &http.Client{Timeout: 30 * time.Second}
 		req, _ := http.NewRequest("GET", cfg.RadarrURL+"/movie", nil)
 		req.Header.Set("X-Api-Key", cfg.RadarrAPIKey)
 		resp, err := httpClient.Do(req)
 		if err != nil {
-			fmt.Fprintf(w, "Radarr error: %v\n", err)
+			fmt.Fprintf(w, "[ERROR] Radarr movie fetch: %v\n", err)
 			return result, fmt.Errorf("Radarr movie fetch: %w", err)
 		} else {
 			if resp.StatusCode != http.StatusOK {
@@ -575,6 +579,8 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 
 			today := time.Now().Truncate(24 * time.Hour)
 			radarrSkippedDL, radarrSkippedIgnored, radarrNoFutureDates := 0, 0, 0
+			radarrAddedCount, radarrUpdatedCount, radarrErrCount := 0, 0, 0
+			var radarrDLNames, radarrIgnoredNames, radarrNoDatesNames, radarrAddedNames, radarrUpdatedNames []string
 			radarrTargets := calendarTargetsForSource(targets, "radarr")
 
 			for _, target := range radarrTargets {
@@ -610,14 +616,19 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 				existingMovieEvents := indexEventsBySummary(allEvents)
 
 				for _, movie := range movies {
+					title, _ := movie["title"].(string)
 					if hasFile, _ := movie["hasFile"].(bool); hasFile {
 						radarrSkippedDL++
-						continue // already downloaded, skip
+						if len(radarrDLNames) < 11 && title != "" {
+							radarrDLNames = append(radarrDLNames, title)
+						}
+						continue
 					}
-					title, _ := movie["title"].(string)
 					if _, ignored := currentIgnored[title]; ignored {
-						fmt.Fprintf(w, "[Radarr] Skipping %q — ignored\n", title)
 						radarrSkippedIgnored++
+						if len(radarrIgnoredNames) < 11 {
+							radarrIgnoredNames = append(radarrIgnoredNames, title)
+						}
 						continue
 					}
 					addedBefore := len(result.Added)
@@ -647,6 +658,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								if ok {
 									existingMovieEvents[summary] = inserted
 								} else {
+									radarrErrCount++
 									fmt.Fprintf(w, "[ERROR] Failed adding %s: %v\n", msg, e2)
 									return e2
 								}
@@ -655,7 +667,10 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 							}
 							if ok {
 								result.Added = append(result.Added, msg)
-								fmt.Fprintf(w, "Added %s\n", msg)
+								radarrAddedCount++
+								if len(radarrAddedNames) < 11 {
+									radarrAddedNames = append(radarrAddedNames, msg)
+								}
 							}
 						} else if allDayEventNeedsUpdate(existing, rd, target.RadarrColorID) {
 							msg := fmt.Sprintf("%s date changed to %s%s", summary, rd, targetLabel(target, multiTarget))
@@ -666,6 +681,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								if ok {
 									existingMovieEvents[summary] = updated
 								} else {
+									radarrErrCount++
 									fmt.Fprintf(w, "[ERROR] Failed updating %s: %v\n", msg, e2)
 									return e2
 								}
@@ -674,7 +690,10 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 							}
 							if ok {
 								result.Updated = append(result.Updated, msg)
-								fmt.Fprintf(w, "Updated: %s\n", msg)
+								radarrUpdatedCount++
+								if len(radarrUpdatedNames) < 11 {
+									radarrUpdatedNames = append(radarrUpdatedNames, msg)
+								}
 							}
 						}
 						return nil
@@ -695,20 +714,30 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 					}
 					if len(result.Added)+len(result.Updated) == addedBefore+updatedBefore {
 						radarrNoFutureDates++
+						if len(radarrNoDatesNames) < 11 && title != "" {
+							radarrNoDatesNames = append(radarrNoDatesNames, title)
+						}
 					}
 				}
 			}
 			if len(radarrTargets) == 0 {
 				fmt.Fprintf(w, "[Radarr] No calendar targets have Radarr enabled\n")
 			} else {
-				fmt.Fprintf(w, "[Radarr] Done — %d no upcoming dates, %d already downloaded, %d ignored\n",
-					radarrNoFutureDates, radarrSkippedDL, radarrSkippedIgnored)
+				fmt.Fprintf(w, "[Radarr] Skipped — downloaded (%d): %s\n", radarrSkippedDL, compactNames(radarrDLNames, 10, radarrSkippedDL))
+				fmt.Fprintf(w, "[Radarr] Skipped — no upcoming dates (%d): %s\n", radarrNoFutureDates, compactNames(radarrNoDatesNames, 10, radarrNoFutureDates))
+				fmt.Fprintf(w, "[Radarr] Skipped — ignored (%d): %s\n", radarrSkippedIgnored, compactNames(radarrIgnoredNames, 10, radarrSkippedIgnored))
+				fmt.Fprintf(w, "[Radarr] Added (%d): %s\n", radarrAddedCount, compactNames(radarrAddedNames, 10, radarrAddedCount))
+				fmt.Fprintf(w, "[Radarr] Updated (%d): %s\n", radarrUpdatedCount, compactNames(radarrUpdatedNames, 10, radarrUpdatedCount))
+				fmt.Fprintf(w, "[Radarr] Errors (%d)\n", radarrErrCount)
+				fmt.Fprintf(w, "[Radarr] Phase complete in %s\n", time.Since(radarrStart).Round(time.Millisecond))
 			}
 		}
 	}
 
 	// ---- Sonarr ----------------------------------------------------------------
 	if cfg.UseSonarr {
+		sonarrStart := time.Now()
+		fmt.Fprintf(w, "[Sync] Starting Sonarr phase...\n")
 		progress("Fetching Sonarr shows...")
 		httpClient := &http.Client{Timeout: 30 * time.Second}
 
@@ -761,7 +790,15 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 
 			now := time.Now().UTC()
 
+			fmt.Fprintf(w, "[Sonarr] %d show(s), %d upcoming episode(s) in next 365 days\n",
+				len(shows), len(allEpisodes))
+			if cfg.SonarrDayOffset != 0 {
+				fmt.Fprintf(w, "[Sonarr] Episode day offset %+d\n", cfg.SonarrDayOffset)
+			}
+
 			sonarrSkippedIgnored := 0
+			sonarrAddedTotal, sonarrUpdatedTotal, sonarrErrTotal := 0, 0, 0
+			var sonarrIgnoredNames []string
 			sonarrTargets := calendarTargetsForSource(targets, "sonarr")
 			for _, target := range sonarrTargets {
 
@@ -774,18 +811,15 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 				}
 				existingEpEvents := indexEventsBySummary(existingEvents)
 
-				fmt.Fprintf(w, "[Sonarr] %d show(s), %d upcoming episode(s) in next 365 days\n",
-					len(shows), len(allEpisodes))
-				if cfg.SonarrDayOffset != 0 {
-					fmt.Fprintf(w, "[Sonarr] Episode day offset %+d\n", cfg.SonarrDayOffset)
-				}
 				progress(fmt.Sprintf("Processing %d shows, %d upcoming episodes...", len(shows), len(allEpisodes)))
 
 				for _, show := range shows {
 					title, _ := show["title"].(string)
 					if _, ignored := currentIgnored[title]; ignored {
-						fmt.Fprintf(w, "[Sonarr] Skipping %q — ignored\n", title)
 						sonarrSkippedIgnored++
+						if len(sonarrIgnoredNames) < 11 {
+							sonarrIgnoredNames = append(sonarrIgnoredNames, title)
+						}
 						continue
 					}
 					showID := show["id"]
@@ -830,6 +864,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								if ok {
 									existingEpEvents[summary] = inserted
 								} else {
+									sonarrErrTotal++
 									fmt.Fprintf(w, "[ERROR] Failed adding %s: %v\n", msg, e2)
 									return result, e2
 								}
@@ -839,7 +874,6 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 							if ok {
 								showAdded++
 								result.Added = append(result.Added, msg)
-								fmt.Fprintf(w, "[Sonarr] Adding %s on %s\n", summary, airDate)
 							}
 						} else if allDayEventNeedsUpdate(existing, airDate, target.SonarrColorID) {
 							msg := fmt.Sprintf("%s date changed to %s%s", summary, airDate, targetLabel(target, multiTarget))
@@ -850,6 +884,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 								if ok {
 									existingEpEvents[summary] = updated
 								} else {
+									sonarrErrTotal++
 									fmt.Fprintf(w, "[ERROR] Failed updating %s: %v\n", msg, e2)
 									return result, e2
 								}
@@ -859,7 +894,6 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 							if ok {
 								showUpdated++
 								result.Updated = append(result.Updated, msg)
-								fmt.Fprintf(w, "[Sonarr] Updated: %s\n", msg)
 							}
 						} else {
 							showSkipped++
@@ -868,13 +902,18 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 					if showUpcoming > 0 {
 						fmt.Fprintf(w, "[Sonarr] %q — %d upcoming: %d added, %d updated, %d already on calendar\n",
 							title, showUpcoming, showAdded, showUpdated, showSkipped)
+						sonarrAddedTotal += showAdded
+						sonarrUpdatedTotal += showUpdated
 					}
 				}
 			}
 			if len(sonarrTargets) == 0 {
 				fmt.Fprintf(w, "[Sonarr] No calendar targets have Sonarr enabled\n")
 			} else {
-				fmt.Fprintf(w, "[Sonarr] Done — %d show(s) ignored (skipped)\n", sonarrSkippedIgnored)
+				fmt.Fprintf(w, "[Sonarr] Done — %d show(s) ignored (%s) | %d added, %d updated, %d errors\n",
+					sonarrSkippedIgnored, compactNames(sonarrIgnoredNames, 10, sonarrSkippedIgnored),
+					sonarrAddedTotal, sonarrUpdatedTotal, sonarrErrTotal)
+				fmt.Fprintf(w, "[Sonarr] Phase complete in %s\n", time.Since(sonarrStart).Round(time.Millisecond))
 			}
 		}
 	}
@@ -996,6 +1035,22 @@ func saveIgnoredList(shows []string) error {
 		return err
 	}
 	return os.WriteFile(dataPath(cfg.IgnoredShowsFile), data, 0644)
+}
+
+// compactNames joins names inline up to max, appending "+N more" based on total.
+// Pass the real total count separately — callers may cap name collection for memory.
+func compactNames(names []string, max, total int) string {
+	if total == 0 {
+		return "(none)"
+	}
+	if total <= max {
+		return strings.Join(names[:total], ", ")
+	}
+	n := max
+	if n > len(names) {
+		n = len(names)
+	}
+	return strings.Join(names[:n], ", ") + fmt.Sprintf(", +%d more", total-n)
 }
 
 // ---- Episode regex (shared with cleanup) ------------------------------------

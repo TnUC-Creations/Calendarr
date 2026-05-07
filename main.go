@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -18,7 +19,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.5.8"
+	appVersion = "1.5.9"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -77,7 +78,6 @@ func runSyncJob() bool {
 
 func syncWorker() {
 	runTime := time.Now()
-	var buf strings.Builder
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -85,7 +85,19 @@ func syncWorker() {
 		return
 	}
 
-	result, syncErr := runSync(cfg, &buf, false)
+	// Open the log file immediately and write the run header so that
+	// auto-refresh shows progress live as the sync runs rather than waiting
+	// for the entire sync to complete before anything appears.
+	var w io.Writer = io.Discard
+	logFile, fileErr := os.OpenFile(currentLogFile(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if fileErr == nil {
+		fmt.Fprintf(logFile, "\n%s\nRun at %s  [Calendarr v%s | uptime: %s]\n",
+			separator(), runTime.Format("2006-01-02 15:04:05"), appVersion, formatUptime(time.Since(startTime)))
+		w = logFile
+	}
+
+	result, syncErr := runSync(cfg, w, false)
+	fmt.Fprintf(w, "[Sync] Total time: %s\n", time.Since(runTime).Round(time.Millisecond))
 
 	status := "Success"
 	if syncErr != nil {
@@ -142,58 +154,61 @@ func syncWorker() {
 		}
 		if cleanupErr != nil {
 			status = fmt.Sprintf("Error: %v", cleanupErr)
-			fmt.Fprintf(&buf, "[ERROR] Auto-cleanup failed: %v\n", cleanupErr)
+			fmt.Fprintf(w, "[ERROR] Auto-cleanup failed: %v\n", cleanupErr)
 		}
 	}
 	finishRun(runTime, status, changes, stats)
 
-	// Log Pushover decisions and send — written to buf so they appear in the log file.
-	if cfg.UsePushover && cfg.PushoverToken != "" && cfg.PushoverUser != "" {
+	// Log Pushover decisions and send — written to w so they appear in the log file.
+	if syncErr != nil {
+		if cfg.UsePushover && cfg.PushoverOnError && cfg.PushoverToken != "" && cfg.PushoverUser != "" {
+			msg := fmt.Sprintf("Sync failed: %v", syncErr)
+			fmt.Fprintf(w, "[Pushover] Error notification: ENABLED — sending failure reason\n")
+			sendPushover(cfg.PushoverToken, cfg.PushoverUser, msg, cfg.PushoverSound)
+		} else if cfg.UsePushover && cfg.PushoverOnError {
+			fmt.Fprintf(w, "[Pushover] Error notification: ENABLED but credentials missing — skipped\n")
+		} else {
+			fmt.Fprintf(w, "[Pushover] Error notification: DISABLED\n")
+		}
+	} else if cfg.UsePushover && cfg.PushoverToken != "" && cfg.PushoverUser != "" {
 		totalDeleted := len(result.Deleted) + len(cleanupDeleted)
-		fmt.Fprintf(&buf, "[Pushover] Sync result: %d added, %d updated, %d deleted (%d from auto-cleanup)\n",
+		fmt.Fprintf(w, "[Pushover] Sync result: %d added, %d updated, %d deleted (%d from auto-cleanup)\n",
 			len(result.Added), len(result.Updated), len(result.Deleted), len(cleanupDeleted))
 
 		var notifyAdded, notifyUpdated, notifyDeleted []string
 		if cfg.PushoverOnAdded {
 			notifyAdded = result.Added
-			fmt.Fprintf(&buf, "[Pushover] Add notifications: ENABLED — %d item(s)\n", len(notifyAdded))
+			fmt.Fprintf(w, "[Pushover] Add notifications: ENABLED — %d item(s)\n", len(notifyAdded))
 		} else {
-			fmt.Fprintf(&buf, "[Pushover] Add notifications: DISABLED\n")
+			fmt.Fprintf(w, "[Pushover] Add notifications: DISABLED\n")
 		}
 		if cfg.PushoverOnUpdated {
 			notifyUpdated = result.Updated
-			fmt.Fprintf(&buf, "[Pushover] Update notifications: ENABLED — %d item(s)\n", len(notifyUpdated))
+			fmt.Fprintf(w, "[Pushover] Update notifications: ENABLED — %d item(s)\n", len(notifyUpdated))
 		} else {
-			fmt.Fprintf(&buf, "[Pushover] Update notifications: DISABLED\n")
+			fmt.Fprintf(w, "[Pushover] Update notifications: DISABLED\n")
 		}
 		if cfg.PushoverOnDeleted {
 			notifyDeleted = append(result.Deleted, cleanupDeleted...)
-			fmt.Fprintf(&buf, "[Pushover] Delete notifications: ENABLED — %d item(s)\n", len(notifyDeleted))
+			fmt.Fprintf(w, "[Pushover] Delete notifications: ENABLED — %d item(s)\n", len(notifyDeleted))
 		} else {
-			fmt.Fprintf(&buf, "[Pushover] Delete notifications: DISABLED (%d item(s) suppressed)\n", totalDeleted)
+			fmt.Fprintf(w, "[Pushover] Delete notifications: DISABLED (%d item(s) suppressed)\n", totalDeleted)
 		}
 
 		if msg := buildPushoverMessage(notifyAdded, notifyUpdated, notifyDeleted); msg != "" {
-			fmt.Fprintf(&buf, "[Pushover] Sending notification\n")
+			fmt.Fprintf(w, "[Pushover] Sending notification\n")
 			sendPushover(cfg.PushoverToken, cfg.PushoverUser, msg, cfg.PushoverSound)
 		} else {
-			fmt.Fprintf(&buf, "[Pushover] Nothing to send — no items in enabled categories\n")
+			fmt.Fprintf(w, "[Pushover] Nothing to send — no items in enabled categories\n")
 		}
 	} else if cfg.UsePushover {
-		fmt.Fprintf(&buf, "[Pushover] Skipped — token or user key not configured\n")
+		fmt.Fprintf(w, "[Pushover] Skipped — token or user key not configured\n")
 	}
 
-	// Write block to today's daily log file (after all decisions are logged).
-	output := buf.String()
-	if f, err := os.OpenFile(currentLogFile(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "\n%s\nRun at %s  [Calendarr v%s | uptime: %s]\n",
-			separator(), runTime.Format("2006-01-02 15:04:05"), appVersion, formatUptime(time.Since(startTime)))
-		if output != "" {
-			f.WriteString(output)
-		}
-		fmt.Fprintf(f, "Status: %s\nAdded: %d  Updated: %d  Deleted: %d\n",
-			status, len(result.Added), len(result.Updated), len(result.Deleted))
-		f.Close()
+	fmt.Fprintf(w, "Status: %s\nAdded: %d  Updated: %d  Deleted: %d\n",
+		status, len(result.Added), len(result.Updated), len(result.Deleted))
+	if logFile != nil {
+		logFile.Close()
 	}
 }
 
@@ -282,6 +297,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/update/status", apiUpdateStatus)
 	mux.HandleFunc("/api/update/check", apiUpdateCheck)
 	mux.HandleFunc("/api/update/apply", apiUpdateApply)
+	mux.HandleFunc("/api/logs/content", apiLogsContent)
 	mux.HandleFunc("/api/preview", apiPreview)
 	mux.HandleFunc("/api/preview/status", apiPreviewStatus)
 	mux.HandleFunc("/oauth/start", handleOAuthStart)

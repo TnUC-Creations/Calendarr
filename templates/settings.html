@@ -447,6 +447,11 @@
                                    {{if .Config.PushoverOnDeleted}}checked{{end}}>
                             <label class="form-check-label" for="pushover_on_deleted">Deleted <span class="text-muted" style="font-size:0.8rem;">(incl. cleanup)</span></label>
                         </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" name="pushover_on_error" id="pushover_on_error"
+                                   {{if .Config.PushoverOnError}}checked{{end}}>
+                            <label class="form-check-label" for="pushover_on_error">Errors <span class="text-muted" style="font-size:0.8rem;">(sync failures)</span></label>
+                        </div>
                     </div>
                 </div>
             </div>

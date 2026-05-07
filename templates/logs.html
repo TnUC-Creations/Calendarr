@@ -19,6 +19,9 @@
             <a href="/logs{{if .SelectedFile}}?file={{.SelectedFile}}{{end}}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-clockwise"></i> Refresh
             </a>
+            <button id="auto-refresh-btn" class="btn btn-sm btn-outline-secondary" onclick="toggleAutoRefresh()">
+                <i class="bi bi-arrow-repeat"></i> Auto Refresh
+            </button>
             {{if .SelectedFile}}
             <a href="/logs/download?file={{.SelectedFile}}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-download"></i> Download
@@ -35,7 +38,41 @@
         </div>
     </div>
     <div class="card-body p-0">
-        <pre class="log-output">{{if .LogContent}}{{.LogContent}}{{else}}No logs yet. Run a sync to generate output.{{end}}</pre>
+        <pre class="log-output" id="log-content">{{if .LogContent}}{{.LogContent}}{{else}}No logs yet. Run a sync to generate output.{{end}}</pre>
     </div>
 </div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+let autoRefreshTimer = null;
+let autoRefreshActive = false;
+
+function toggleAutoRefresh() {
+    autoRefreshActive = !autoRefreshActive;
+    const btn = document.getElementById('auto-refresh-btn');
+    if (autoRefreshActive) {
+        btn.classList.replace('btn-outline-secondary', 'btn-secondary');
+        fetchLogContent();
+        autoRefreshTimer = setInterval(fetchLogContent, 5000);
+    } else {
+        btn.classList.replace('btn-secondary', 'btn-outline-secondary');
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+    }
+}
+
+function fetchLogContent() {
+    const sel = document.querySelector('select');
+    const file = sel ? sel.value : '';
+    const url = '/api/logs/content' + (file ? '?file=' + encodeURIComponent(file) : '');
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('log-content');
+            if (el) el.textContent = data.content || 'No logs yet. Run a sync to generate output.';
+        })
+        .catch(() => {});
+}
+</script>
 {{end}}

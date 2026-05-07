@@ -301,6 +301,7 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		applySettingsForm(&cfg, r)
 		_ = saveConfig(cfg)
+		logEvent("[UI] Settings saved")
 		setFlash(w, "success", "Settings saved!")
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
@@ -327,6 +328,7 @@ func applySettingsForm(cfg *Config, r *http.Request) {
 	cfg.PushoverOnAdded = r.FormValue("pushover_on_added") != ""
 	cfg.PushoverOnUpdated = r.FormValue("pushover_on_updated") != ""
 	cfg.PushoverOnDeleted = r.FormValue("pushover_on_deleted") != ""
+	cfg.PushoverOnError = r.FormValue("pushover_on_error") != ""
 	cfg.SyncOnStart = r.FormValue("sync_on_start") != ""
 	cfg.AutoCleanupPast = r.FormValue("auto_cleanup_past") != ""
 	cfg.WebBindAddress = normalizeWebBindAddress(r.FormValue("web_bind_address"))
@@ -540,6 +542,7 @@ func handleBackup(w http.ResponseWriter, r *http.Request) {
 
 	zw.Close()
 
+	logEvent("[UI] Settings backup downloaded")
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+zipName+`"`)
 	w.Write(buf.Bytes())
@@ -630,6 +633,7 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		_ = os.WriteFile(dataPath(ignoredFile), ignoredBytes, 0644)
 	}
 
+	logEvent("[UI] Settings restored from backup")
 	setFlash(w, "success", "Settings restored successfully!")
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
@@ -674,6 +678,44 @@ func writePNG(w http.ResponseWriter, data []byte) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.Write(data)
+}
+
+// ---- /api/logs/content ------------------------------------------------------
+
+func apiLogsContent(w http.ResponseWriter, r *http.Request) {
+	selectedFile := filepath.Base(r.URL.Query().Get("file"))
+	allFiles := listLogFiles()
+	if selectedFile == "." || selectedFile == "" {
+		if len(allFiles) > 0 {
+			selectedFile = allFiles[0].Name
+		}
+	}
+	logContent := ""
+	if selectedFile != "" {
+		path := filepath.Join(dataPath(logsDir), selectedFile)
+		if data, err := os.ReadFile(path); err == nil {
+			content := string(data)
+			sep := "\n" + separator()
+			var blocks []string
+			for _, b := range strings.Split(content, sep) {
+				b = strings.TrimSpace(b)
+				if b != "" {
+					blocks = append(blocks, b)
+				}
+			}
+			if len(blocks) > 50 {
+				blocks = blocks[len(blocks)-50:]
+			}
+			for i, j := 0, len(blocks)-1; i < j; i, j = i+1, j-1 {
+				blocks[i], blocks[j] = blocks[j], blocks[i]
+			}
+			logContent = strings.Join(blocks, "\n"+separator()+"\n")
+		}
+	}
+	jsonOK(w, map[string]interface{}{
+		"content": logContent,
+		"file":    selectedFile,
+	})
 }
 
 // ---- Template loading -------------------------------------------------------

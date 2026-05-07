@@ -113,6 +113,7 @@ func apiGoogleDisconnect(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
+	logEvent("[UI] Google Calendar disconnected")
 	jsonOK(w, map[string]interface{}{"ok": true})
 }
 
@@ -127,6 +128,7 @@ func apiRun(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": "Already running"})
 		return
 	}
+	logEvent("[UI] Manual sync triggered")
 	go runSyncJob()
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Sync started"})
 }
@@ -235,6 +237,7 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
+	logEvent("[UI] Settings saved")
 	jsonOK(w, map[string]interface{}{"ok": true})
 }
 
@@ -348,6 +351,7 @@ func apiIgnoredSave(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
+	logEvent(fmt.Sprintf("[UI] Ignored shows updated (%d ignored)", len(body.Shows)))
 	jsonOK(w, map[string]interface{}{"ok": true})
 }
 

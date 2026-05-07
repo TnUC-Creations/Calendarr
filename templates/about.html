@@ -308,6 +308,18 @@
     <div class="card-body p-0">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.5.9</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Sync logs now show connection attempts, per-phase timings, and compact item lists so large libraries stay readable.</li>
+                <li>Actions like saving settings, downloading backups, and updating the ignored list are now recorded in the daily log.</li>
+                <li>Logs page has an Auto Refresh toggle that updates every 5 seconds without reloading the page.</li>
+                <li>Added an Errors option in Pushover settings to get notified when a sync fails.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.5.8</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
@@ -344,6 +356,12 @@
                 <li>Updated the app logo, favicon, and About page layout.</li>
             </ul>
         </div>
+        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
+                <i class="bi bi-chevron-down me-1"></i>Show older versions
+            </button>
+        </div>
+        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.5.4</span>
@@ -353,12 +371,6 @@
                 <li>Added additional security updates for release builds.</li>
             </ul>
         </div>
-        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
-            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
-                <i class="bi bi-chevron-down me-1"></i>Show older versions
-            </button>
-        </div>
-        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.5.3</span>

@@ -47,6 +47,7 @@ type Config struct {
 	PushoverOnAdded   bool   `json:"pushover_on_added"`
 	PushoverOnUpdated bool   `json:"pushover_on_updated"`
 	PushoverOnDeleted bool   `json:"pushover_on_deleted"`
+	PushoverOnError   bool   `json:"pushover_on_error"`
 
 	RunIntervalHours float64 `json:"run_interval_hours"`
 	WebPort          int     `json:"web_port"`
