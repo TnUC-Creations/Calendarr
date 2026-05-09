@@ -180,14 +180,10 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, err := loadConfig()
-	if err != nil {
-		setFlash(w, "danger", "Could not load config: "+err.Error())
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
-		return
-	}
-	cfg.GoogleRefreshToken = token.RefreshToken
-	if err := saveConfig(cfg); err != nil {
+	if err := mutateConfig(func(c *Config) error {
+		c.GoogleRefreshToken = token.RefreshToken
+		return nil
+	}); err != nil {
 		setFlash(w, "danger", "Could not save token: "+err.Error())
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return

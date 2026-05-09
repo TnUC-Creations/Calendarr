@@ -81,6 +81,20 @@ func isRunning() bool {
 	return appState.IsRunning
 }
 
+// tryStartRun atomically claims the running flag. Returns true if the caller
+// successfully became the active sync; false if a sync was already in progress.
+// Pairs with finishRun (which clears IsRunning) to prevent two syncs from
+// starting from a check-then-set race.
+func tryStartRun() bool {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	if appState.IsRunning {
+		return false
+	}
+	appState.IsRunning = true
+	return true
+}
+
 func setNextRun(t time.Time) {
 	stateMu.Lock()
 	appState.NextRun = &t

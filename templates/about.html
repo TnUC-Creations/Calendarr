@@ -308,6 +308,20 @@
     <div class="card-body p-0">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.7.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Settings saves now line up safely when two changes happen at the same time, so nothing gets lost.</li>
+                <li>Clicking Run Now several times in a row no longer starts more than one sync.</li>
+                <li>A bad Radarr or Sonarr URL now shows a clean error instead of crashing the request.</li>
+                <li>The updater checks the download came back as a real file before applying it.</li>
+                <li>Oversized uploads are rejected up front so the app does not get stuck on a runaway request.</li>
+                <li>History entries are no longer lost if a sync and a clear happen close together.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.6.0</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
@@ -349,9 +363,15 @@
                 <li>Added an optional desktop shortcut choice during setup.</li>
             </ul>
         </div>
+        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
+                <i class="bi bi-chevron-down me-1"></i>Show older versions
+            </button>
+        </div>
+        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="badge bg-primary px-2">v1.5.6</span>
+                <span class="badge bg-secondary px-2">v1.5.6</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
             <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
@@ -359,12 +379,6 @@
                 <li>Added per-calendar cleanup choices when more than one calendar is configured.</li>
             </ul>
         </div>
-        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
-            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
-                <i class="bi bi-chevron-down me-1"></i>Show older versions
-            </button>
-        </div>
-        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-secondary px-2">v1.5.5</span>

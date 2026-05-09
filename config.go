@@ -5,11 +5,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // dataDir is the root directory for all data files (config, logs, history, etc.).
 // Set by the --data CLI flag; empty means use the current working directory.
 var dataDir string
+
+// configMu serializes config writes so simultaneous saves cannot interleave or
+// clobber each other. Plain reads via loadConfig do not require the lock — the
+// atomic rename in saveConfigLocked guarantees readers see either the old file
+// or the new file, never a half-written one.
+var configMu sync.Mutex
 
 // dataPath joins rel to dataDir. Absolute paths are returned unchanged.
 func dataPath(rel string) string {
@@ -230,6 +237,15 @@ func loadConfig() (Config, error) {
 }
 
 func saveConfig(cfg Config) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	return saveConfigLocked(cfg)
+}
+
+// saveConfigLocked performs the actual write. Caller MUST already hold configMu.
+// Writes go to a sibling .tmp file and are renamed into place so a crash mid-write
+// cannot corrupt the active config.
+func saveConfigLocked(cfg Config) error {
 	cfg.WebBindAddress = normalizeWebBindAddress(cfg.WebBindAddress)
 	cfg.IgnoredShowsFile = sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)
 	normalizeCalendarTargets(&cfg)
@@ -237,7 +253,42 @@ func saveConfig(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dataPath(configFile), data, 0644)
+	target := dataPath(configFile)
+	tmp := target + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// mutateConfig is the safe load-modify-save primitive for any endpoint that
+// changes settings. It holds configMu across the read and the write so two
+// simultaneous mutators cannot lose each other's changes. Errors from fn or
+// from the save propagate to the caller unchanged.
+func mutateConfig(fn func(*Config) error) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	cfg, err := loadConfig()
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := fn(&cfg); err != nil {
+		return err
+	}
+	return saveConfigLocked(cfg)
+}
+
+// cleanupConfigTmp removes a leftover config.json.tmp from a crash mid-rename
+// during a previous run. Called once at startup.
+func cleanupConfigTmp() {
+	tmp := dataPath(configFile) + ".tmp"
+	if _, err := os.Stat(tmp); err == nil {
+		_ = os.Remove(tmp)
+	}
 }
 
 func normalizeWebBindAddress(addr string) string {

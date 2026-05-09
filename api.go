@@ -107,9 +107,10 @@ func apiGoogleDisconnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
-	cfg, _ := loadConfig()
-	cfg.GoogleRefreshToken = ""
-	if err := saveConfig(cfg); err != nil {
+	if err := mutateConfig(func(c *Config) error {
+		c.GoogleRefreshToken = ""
+		return nil
+	}); err != nil {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
@@ -124,26 +125,18 @@ func apiSetPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		OldPassword string `json:"old_password"`
 		NewPassword string `json:"new_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
-		return
-	}
-	cfg, err := loadConfig()
-	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
-		return
-	}
-	if cfg.WebUIPasswordHash != "" {
-		if !checkPassword(cfg.WebUIPasswordHash, body.OldPassword) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
 			return
 		}
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
 	}
 	if len(body.NewPassword) < minPasswordLen {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("Password must be at least %d characters.", minPasswordLen)})
@@ -158,8 +151,22 @@ func apiSetPassword(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
-	cfg.WebUIPasswordHash = hash
-	if err := saveConfig(cfg); err != nil {
+	var unauthorized bool
+	err = mutateConfig(func(c *Config) error {
+		if c.WebUIPasswordHash != "" && !checkPassword(c.WebUIPasswordHash, body.OldPassword) {
+			unauthorized = true
+			return fmt.Errorf("Current password is incorrect.")
+		}
+		c.WebUIPasswordHash = hash
+		return nil
+	})
+	if err != nil {
+		if unauthorized {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
+			return
+		}
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
@@ -172,34 +179,50 @@ func apiClearPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		OldPassword string `json:"old_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
-	cfg, err := loadConfig()
+	var unauthorized, alreadyClear, lanBlocked bool
+	err := mutateConfig(func(c *Config) error {
+		if c.WebUIPasswordHash == "" {
+			alreadyClear = true
+			return fmt.Errorf("no password set")
+		}
+		if !checkPassword(c.WebUIPasswordHash, body.OldPassword) {
+			unauthorized = true
+			return fmt.Errorf("Current password is incorrect.")
+		}
+		if c.WebBindAddress == "0.0.0.0" {
+			lanBlocked = true
+			return fmt.Errorf("Cannot remove the password while LAN access is enabled. Switch to Local only first.")
+		}
+		c.WebUIPasswordHash = ""
+		return nil
+	})
 	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
-		return
-	}
-	if cfg.WebUIPasswordHash == "" {
-		jsonOK(w, map[string]interface{}{"ok": true})
-		return
-	}
-	if !checkPassword(cfg.WebUIPasswordHash, body.OldPassword) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
-		return
-	}
-	if cfg.WebBindAddress == "0.0.0.0" {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "Cannot remove the password while LAN access is enabled. Switch to Local only first."})
-		return
-	}
-	cfg.WebUIPasswordHash = ""
-	if err := saveConfig(cfg); err != nil {
+		if alreadyClear {
+			jsonOK(w, map[string]interface{}{"ok": true})
+			return
+		}
+		if unauthorized {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
+			return
+		}
+		if lanBlocked {
+			jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+			return
+		}
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
@@ -214,12 +237,11 @@ func apiRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
-	if isRunning() {
+	if !runSyncJob() {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": "Already running"})
 		return
 	}
 	logEvent("[UI] Manual sync triggered")
-	go runSyncJob()
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Sync started"})
 }
 
@@ -230,10 +252,17 @@ func apiCleanup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		Mode string `json:"mode"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err.Error() != "EOF" {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
+		// Decoding errors here are non-fatal — Mode falls back to "past".
+	}
 	if body.Mode == "" {
 		body.Mode = "past"
 	}
@@ -259,12 +288,17 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		CalendarID string   `json:"calendar_id"`
 		Mode       string   `json:"mode"`
 		Sources    []string `json:"sources"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
 		adminLog("Target cleanup rejected", err.Error())
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
@@ -288,24 +322,30 @@ func apiCalendarTargetsSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		Targets []CalendarTarget `json:"targets"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
-	cfg, err := loadConfig()
+	var saved []CalendarTarget
+	err := mutateConfig(func(c *Config) error {
+		c.CalendarTargets = body.Targets
+		normalizeCalendarTargets(c)
+		saved = c.CalendarTargets
+		return nil
+	})
 	if err != nil {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
-	cfg.CalendarTargets = body.Targets
-	if err := saveConfig(cfg); err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
-		return
-	}
-	jsonOK(w, map[string]interface{}{"ok": true, "targets": cfg.CalendarTargets})
+	jsonOK(w, map[string]interface{}{"ok": true, "targets": saved})
 }
 
 func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
@@ -313,21 +353,22 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
-	cfg, err := loadConfig()
-	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
-		return
-	}
 	if err := parseSettingsRequest(r); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Settings payload too large.")
+			return
+		}
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
-	applySettingsForm(&cfg, r)
-	if cfg.WebBindAddress == "0.0.0.0" && cfg.WebUIPasswordHash == "" {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "Set a Web UI password before enabling Local network access."})
-		return
-	}
-	if err := saveConfig(cfg); err != nil {
+	err := mutateConfig(func(c *Config) error {
+		applySettingsForm(c, r)
+		if c.WebBindAddress == "0.0.0.0" && c.WebUIPasswordHash == "" {
+			return fmt.Errorf("Set a Web UI password before enabling Local network access.")
+		}
+		return nil
+	})
+	if err != nil {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
@@ -434,10 +475,15 @@ func apiIgnoredSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		Shows []string `json:"shows"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
@@ -542,8 +588,11 @@ func apiTestRadarr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, _ := http.NewRequest("GET", body.URL+"/system/status", nil)
-	req.Header.Set("X-Api-Key", body.APIKey)
+	req, err := newRequestWithKey("GET", body.URL+"/system/status", body.APIKey)
+	if err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
@@ -575,8 +624,11 @@ func apiTestSonarr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, _ := http.NewRequest("GET", body.URL+"/system/status", nil)
-	req.Header.Set("X-Api-Key", body.APIKey)
+	req, err := newRequestWithKey("GET", body.URL+"/system/status", body.APIKey)
+	if err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})

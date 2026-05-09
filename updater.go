@@ -89,7 +89,15 @@ func checkForUpdates() {
 
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", githubOwner, githubRepo)
 	client := &http.Client{Timeout: 15 * time.Second}
-	req, _ := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		newState := UpdateState{Checking: false, LastChecked: time.Now(), Error: "Could not build update request: " + err.Error()}
+		logEvent("[Updater] Check failed: " + newState.Error)
+		updateMu.Lock()
+		updateState = newState
+		updateMu.Unlock()
+		return
+	}
 	req.Header.Set("User-Agent", "Calendarr/"+appVersion)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
@@ -212,6 +220,9 @@ func downloadUpdate() error {
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download returned HTTP %d", resp.StatusCode)
+	}
 
 	f, err := os.Create(updatePath)
 	if err != nil {

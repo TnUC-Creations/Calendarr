@@ -19,6 +19,20 @@ import (
 	"google.golang.org/api/option"
 )
 
+// newRequestWithKey builds an HTTP request and attaches the given API key
+// header in one step. Surfaces NewRequest errors (bad URL, bad method) so
+// callers no longer panic on `req.Header.Set` against a nil request.
+func newRequestWithKey(method, url, apiKey string) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request to %q: %w", url, err)
+	}
+	if apiKey != "" {
+		req.Header.Set("X-Api-Key", apiKey)
+	}
+	return req, nil
+}
+
 // ---- Template formatting ----------------------------------------------------
 
 // fmtMovieTitle replaces {title} in a template string.
@@ -362,8 +376,10 @@ func checkConnectivity(cfg Config, calSvc *calendar.Service, targets []CalendarT
 
 	if cfg.UseRadarr {
 		err := retryWithLog(w, "Radarr", syncPreflightAttempts, syncPreflightDelay, func() error {
-			req, _ := http.NewRequest("GET", cfg.RadarrURL+"/system/status", nil)
-			req.Header.Set("X-Api-Key", cfg.RadarrAPIKey)
+			req, err := newRequestWithKey("GET", cfg.RadarrURL+"/system/status", cfg.RadarrAPIKey)
+			if err != nil {
+				return err
+			}
 			return checkHTTPStatus(client, req)
 		})
 		if err != nil {
@@ -374,8 +390,10 @@ func checkConnectivity(cfg Config, calSvc *calendar.Service, targets []CalendarT
 
 	if cfg.UseSonarr {
 		err := retryWithLog(w, "Sonarr", syncPreflightAttempts, syncPreflightDelay, func() error {
-			req, _ := http.NewRequest("GET", cfg.SonarrURL+"/system/status", nil)
-			req.Header.Set("X-Api-Key", cfg.SonarrAPIKey)
+			req, err := newRequestWithKey("GET", cfg.SonarrURL+"/system/status", cfg.SonarrAPIKey)
+			if err != nil {
+				return err
+			}
 			return checkHTTPStatus(client, req)
 		})
 		if err != nil {
@@ -551,8 +569,11 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		fmt.Fprintf(w, "[Sync] Starting Radarr phase...\n")
 		progress("Fetching Radarr movies...")
 		httpClient := &http.Client{Timeout: 30 * time.Second}
-		req, _ := http.NewRequest("GET", cfg.RadarrURL+"/movie", nil)
-		req.Header.Set("X-Api-Key", cfg.RadarrAPIKey)
+		req, err := newRequestWithKey("GET", cfg.RadarrURL+"/movie", cfg.RadarrAPIKey)
+		if err != nil {
+			fmt.Fprintf(w, "[ERROR] Radarr movie fetch: %v\n", err)
+			return result, fmt.Errorf("Radarr movie fetch: %w", err)
+		}
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			fmt.Fprintf(w, "[ERROR] Radarr movie fetch: %v\n", err)
@@ -742,8 +763,11 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		httpClient := &http.Client{Timeout: 30 * time.Second}
 
 		// Fetch all shows.
-		req, _ := http.NewRequest("GET", cfg.SonarrURL+"/series", nil)
-		req.Header.Set("X-Api-Key", cfg.SonarrAPIKey)
+		req, err := newRequestWithKey("GET", cfg.SonarrURL+"/series", cfg.SonarrAPIKey)
+		if err != nil {
+			fmt.Fprintf(w, "Sonarr error building series request: %v\n", err)
+			return result, fmt.Errorf("Sonarr series request: %w", err)
+		}
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			fmt.Fprintf(w, "Sonarr error fetching series: %v\n", err)
@@ -766,9 +790,13 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 			// Fetch upcoming episodes ONCE for all shows.
 			nowISO := time.Now().UTC().Format(time.RFC3339)
 			endISO := time.Now().UTC().Add(365 * 24 * time.Hour).Format(time.RFC3339)
-			calEp, _ := http.NewRequest("GET",
-				cfg.SonarrURL+"/calendar?start="+url.QueryEscape(nowISO)+"&end="+url.QueryEscape(endISO), nil)
-			calEp.Header.Set("X-Api-Key", cfg.SonarrAPIKey)
+			calEp, err := newRequestWithKey("GET",
+				cfg.SonarrURL+"/calendar?start="+url.QueryEscape(nowISO)+"&end="+url.QueryEscape(endISO),
+				cfg.SonarrAPIKey)
+			if err != nil {
+				fmt.Fprintf(w, "Sonarr error building calendar request: %v\n", err)
+				return result, fmt.Errorf("Sonarr calendar request: %w", err)
+			}
 			epResp, err := httpClient.Do(calEp)
 			var allEpisodes []map[string]interface{}
 			if err != nil {

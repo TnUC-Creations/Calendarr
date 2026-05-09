@@ -300,22 +300,27 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSettings(w http.ResponseWriter, r *http.Request) {
-	cfg, _ := loadConfig()
-
 	if r.Method == http.MethodPost {
 		if err := parseSettingsRequest(r); err != nil {
 			setFlash(w, "danger", "Settings could not be saved: "+err.Error())
 			http.Redirect(w, r, "/settings", http.StatusSeeOther)
 			return
 		}
-		applySettingsForm(&cfg, r)
-		if cfg.WebBindAddress == "0.0.0.0" && cfg.WebUIPasswordHash == "" {
-			setFlash(w, "danger", "Set a Web UI password before enabling Local network access.")
-			http.Redirect(w, r, "/settings", http.StatusSeeOther)
-			return
-		}
-		if err := saveConfig(cfg); err != nil {
-			setFlash(w, "danger", "Settings could not be saved: "+err.Error())
+		var bindBlocked bool
+		err := mutateConfig(func(c *Config) error {
+			applySettingsForm(c, r)
+			if c.WebBindAddress == "0.0.0.0" && c.WebUIPasswordHash == "" {
+				bindBlocked = true
+				return fmt.Errorf("Set a Web UI password before enabling Local network access.")
+			}
+			return nil
+		})
+		if err != nil {
+			if bindBlocked {
+				setFlash(w, "danger", err.Error())
+			} else {
+				setFlash(w, "danger", "Settings could not be saved: "+err.Error())
+			}
 			http.Redirect(w, r, "/settings", http.StatusSeeOther)
 			return
 		}
@@ -325,6 +330,7 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cfg, _ := loadConfig()
 	render(w, "settings", SettingsData{
 		PageBase: newBase("settings", r, w),
 		Config:   cfg,
@@ -332,8 +338,11 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseSettingsRequest(r *http.Request) error {
+	// Settings forms carry small text fields; cap the body so a runaway upload
+	// cannot exhaust memory before parsing rejects it.
+	r.Body = http.MaxBytesReader(nil, r.Body, maxFormBodyBytes)
 	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "multipart/form-data") {
-		return r.ParseMultipartForm(10 << 20)
+		return r.ParseMultipartForm(maxFormBodyBytes)
 	}
 	return r.ParseForm()
 }
@@ -522,10 +531,9 @@ func handleRunNow(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	if isRunning() {
+	if !runSyncJob() {
 		setFlash(w, "warning", "A sync is already in progress.")
 	} else {
-		go runSyncJob()
 		setFlash(w, "success", "Sync started!")
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -568,7 +576,16 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
 	}
-	r.ParseMultipartForm(10 << 20)
+	limitBody(w, r, maxRestoreBodyBytes)
+	if err := r.ParseMultipartForm(maxRestoreBodyBytes); err != nil {
+		if isBodyTooLarge(err) {
+			setFlash(w, "danger", "Backup file is too large (5 MB max).")
+		} else {
+			setFlash(w, "danger", "Could not read uploaded file: "+err.Error())
+		}
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
 	file, _, err := r.FormFile("config_file")
 	if err != nil {
 		setFlash(w, "danger", "No file selected.")
@@ -743,8 +760,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			renderLogin(w, true, "Could not hash password: "+err.Error())
 			return
 		}
-		cfg.WebUIPasswordHash = hash
-		if err := saveConfig(cfg); err != nil {
+		if err := mutateConfig(func(c *Config) error {
+			c.WebUIPasswordHash = hash
+			return nil
+		}); err != nil {
 			renderLogin(w, true, "Could not save password: "+err.Error())
 			return
 		}

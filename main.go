@@ -19,7 +19,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.6.0"
+	appVersion = "1.7.0"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -66,12 +66,12 @@ func pruneOldLogs(maxFiles int) {
 // ---- Sync job ---------------------------------------------------------------
 
 // runSyncJob starts a sync in a goroutine if one isn't already running.
-// Returns false if a sync was already in progress.
+// Returns false if a sync was already in progress. Uses tryStartRun so two
+// callers racing in the same instant cannot both launch a worker.
 func runSyncJob() bool {
-	if isRunning() {
+	if !tryStartRun() {
 		return false
 	}
-	setRunning(true)
 	safeGo(syncWorker)
 	return true
 }
@@ -370,6 +370,9 @@ func startApp() {
 	log.SetFlags(log.Ldate | log.Ltime)
 
 	loadTemplates()
+
+	cleanupConfigTmp()
+	cleanupHistoryTmp()
 
 	cfg, err := loadConfig()
 	if err != nil {
