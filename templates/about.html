@@ -308,6 +308,18 @@
     <div class="card-body p-0">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.6.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Added a Web UI password. Settings has a new Web UI Security card where you can set, change, or remove it.</li>
+                <li>A password is now required before turning on Local network access, so the dashboard cannot be controlled from another device without it.</li>
+                <li>Backup restore now ignores any custom file path inside the backup, so an uploaded zip can only write to the normal data folder.</li>
+                <li>Restore now checks the ignored shows file is a valid list before applying it, and shows a clear error if the save fails.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.5.9</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
@@ -347,21 +359,21 @@
                 <li>Added per-calendar cleanup choices when more than one calendar is configured.</li>
             </ul>
         </div>
-        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="badge bg-primary px-2">v1.5.5</span>
-                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
-            </div>
-            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
-                <li>Updated the app logo, favicon, and About page layout.</li>
-            </ul>
-        </div>
         <div class="p-2 text-center" style="border-top:1px solid var(--border);">
             <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
                 <i class="bi bi-chevron-down me-1"></i>Show older versions
             </button>
         </div>
         <div class="collapse" id="older-changelog">
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v1.5.5</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Updated the app logo, favicon, and About page layout.</li>
+            </ul>
+        </div>
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.5.4</span>

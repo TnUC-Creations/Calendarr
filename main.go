@@ -19,7 +19,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.5.9"
+	appVersion = "1.6.0"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -271,6 +271,8 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/run", handleRunNow)
 	mux.HandleFunc("/backup", handleBackup)
 	mux.HandleFunc("/restore", handleRestore)
+	mux.HandleFunc("/login", handleLogin)
+	mux.HandleFunc("/logout", handleLogout)
 	mux.HandleFunc("/favicon.ico", handleFavicon)
 	mux.HandleFunc("/assets/sidebar-logo.png", handleSidebarLogo)
 	mux.HandleFunc("/assets/sidebar-logo-v2.png", handleSidebarLogoV2)
@@ -304,6 +306,8 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/oauth/callback", handleOAuthCallback)
 	mux.HandleFunc("/api/auth/google/status", apiGoogleStatus)
 	mux.HandleFunc("/api/auth/google/disconnect", apiGoogleDisconnect)
+	mux.HandleFunc("/api/auth/password", apiSetPassword)
+	mux.HandleFunc("/api/auth/password/clear", apiClearPassword)
 	mux.HandleFunc("/api/calendars", apiCalendars)
 }
 
@@ -394,13 +398,14 @@ func startApp() {
 
 	safeGo(backgroundScheduler)
 	safeGo(backgroundUpdateChecker)
+	safeGo(sessionSweeper)
 
 	mux := http.NewServeMux()
 	registerRoutes(mux)
 
 	addr := fmt.Sprintf("%s:%d", cfg.WebBindAddress, cfg.WebPort)
 	fmt.Printf("%s v%s listening on http://%s\n", appName, appVersion, addr)
-	if err := http.ListenAndServe(addr, httpMiddleware(csrfMiddleware(mux))); err != nil {
+	if err := http.ListenAndServe(addr, httpMiddleware(authMiddleware(csrfMiddleware(mux)))); err != nil {
 		fmt.Fprintln(os.Stderr, "Server error:", err)
 		os.Exit(1)
 	}

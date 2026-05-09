@@ -197,13 +197,19 @@
         <ul class="nav flex-column mt-1">
             {{template "navLinks" .}}
         </ul>
-        <div class="sidebar-footer">
+        <div class="sidebar-footer d-flex flex-column gap-2">
             <button onclick="toggleTheme()" class="theme-toggle-btn" title="Toggle light/dark mode">
                 <i class="bi bi-sun-fill theme-icon-sun"></i>
                 <i class="bi bi-moon-fill theme-icon-moon"></i>
                 <span class="theme-icon-sun" style="font-size:0.8rem;">Light mode</span>
                 <span class="theme-icon-moon" style="font-size:0.8rem;">Dark mode</span>
             </button>
+            {{if .AuthEnabled}}
+            <a href="/logout" class="theme-toggle-btn" title="Sign out" style="text-decoration:none;">
+                <i class="bi bi-box-arrow-right"></i>
+                <span style="font-size:0.8rem;">Logout</span>
+            </a>
+            {{end}}
         </div>
     </div>
 </div>
@@ -217,13 +223,19 @@
     <ul class="nav flex-column mt-1">
         {{template "navLinks" .}}
     </ul>
-    <div class="sidebar-footer">
+    <div class="sidebar-footer d-flex flex-column gap-2">
         <button onclick="toggleTheme()" class="theme-toggle-btn" title="Toggle light/dark mode">
             <i class="bi bi-sun-fill theme-icon-sun"></i>
             <i class="bi bi-moon-fill theme-icon-moon"></i>
             <span class="theme-icon-sun" style="font-size:0.8rem;">Light mode</span>
             <span class="theme-icon-moon" style="font-size:0.8rem;">Dark mode</span>
         </button>
+        {{if .AuthEnabled}}
+        <a href="/logout" class="theme-toggle-btn" title="Sign out" style="text-decoration:none;">
+            <i class="bi bi-box-arrow-right"></i>
+            <span style="font-size:0.8rem;">Logout</span>
+        </a>
+        {{end}}
     </div>
 </nav>
 

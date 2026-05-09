@@ -1034,7 +1034,7 @@ func saveIgnoredList(shows []string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dataPath(cfg.IgnoredShowsFile), data, 0644)
+	return os.WriteFile(dataPath(sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)), data, 0644)
 }
 
 // compactNames joins names inline up to max, appending "+N more" based on total.

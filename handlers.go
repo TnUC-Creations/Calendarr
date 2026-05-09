@@ -87,6 +87,7 @@ type PageBase struct {
 	UpdateAvailable   bool
 	UpdateVersion     string
 	CalendarConnected bool
+	AuthEnabled       bool
 }
 
 func newBase(page string, r *http.Request, w http.ResponseWriter) PageBase {
@@ -101,6 +102,7 @@ func newBase(page string, r *http.Request, w http.ResponseWriter) PageBase {
 		UpdateAvailable:   u.Available,
 		UpdateVersion:     u.LatestVer,
 		CalendarConnected: cfg.GoogleRefreshToken != "",
+		AuthEnabled:       cfg.WebUIPasswordHash != "",
 	}
 }
 
@@ -158,6 +160,13 @@ type LogsData struct {
 	LogContent   string
 	LogFiles     []LogFile
 	SelectedFile string
+}
+
+type LoginData struct {
+	AppVersion string
+	SetupMode  bool
+	Error      string
+	CSRFToken  string
 }
 
 type AboutDeps struct {
@@ -300,7 +309,16 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		applySettingsForm(&cfg, r)
-		_ = saveConfig(cfg)
+		if cfg.WebBindAddress == "0.0.0.0" && cfg.WebUIPasswordHash == "" {
+			setFlash(w, "danger", "Set a Web UI password before enabling Local network access.")
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+		if err := saveConfig(cfg); err != nil {
+			setFlash(w, "danger", "Settings could not be saved: "+err.Error())
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
 		logEvent("[UI] Settings saved")
 		setFlash(w, "success", "Settings saved!")
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
@@ -515,10 +533,7 @@ func handleRunNow(w http.ResponseWriter, r *http.Request) {
 
 func handleBackup(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := loadConfig()
-	ignoredFile := cfg.IgnoredShowsFile
-	if ignoredFile == "" {
-		ignoredFile = "ignored_shows.json"
-	}
+	ignoredFile := sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)
 
 	zipName := "calendarr-backup-" + time.Now().Format("2006-01-02") + ".zip"
 
@@ -615,6 +630,7 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
 	}
+	cfg.IgnoredShowsFile = sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)
 	hasCalendar := strings.TrimSpace(cfg.CalendarID) != "" || len(cfg.CalendarTargets) > 0
 	if cfg.RadarrAPIKey == "" && cfg.SonarrAPIKey == "" && !hasCalendar {
 		setFlash(w, "danger", "Invalid backup — missing required fields.")
@@ -622,15 +638,31 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	normalizeCalendarTargets(&cfg)
-	_ = saveConfig(cfg)
-
 	if ignoredBytes != nil {
-		ignoredFile := cfg.IgnoredShowsFile
-		if ignoredFile == "" {
-			ignoredFile = "ignored_shows.json"
+		var arr []string
+		if err := json.Unmarshal(ignoredBytes, &arr); err != nil {
+			setFlash(w, "danger", "Backup contains an invalid ignored_shows.json.")
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
 		}
-		_ = os.WriteFile(dataPath(ignoredFile), ignoredBytes, 0644)
+		safe, err := json.MarshalIndent(arr, "", "  ")
+		if err != nil {
+			setFlash(w, "danger", "Could not encode ignored shows from backup: "+err.Error())
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+		if err := os.WriteFile(dataPath(cfg.IgnoredShowsFile), safe, 0644); err != nil {
+			setFlash(w, "danger", "Could not write ignored shows from backup: "+err.Error())
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+	}
+
+	normalizeCalendarTargets(&cfg)
+	if err := saveConfig(cfg); err != nil {
+		setFlash(w, "danger", "Could not save restored config: "+err.Error())
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
 	}
 
 	logEvent("[UI] Settings restored from backup")
@@ -651,6 +683,90 @@ func handleHistoryClear(w http.ResponseWriter, r *http.Request) {
 	_ = saveHistory([]HistoryEntry{{Timestamp: ts, Action: "system", Message: "[System] History was cleared"}})
 	setFlash(w, "success", "History cleared.")
 	http.Redirect(w, r, "/history", http.StatusSeeOther)
+}
+
+// renderLogin renders the standalone login template. setupMode is true when no
+// password is configured yet (first-time setup flow on a LAN-bound install).
+func renderLogin(w http.ResponseWriter, setupMode bool, errMsg string) {
+	t, ok := pageTemplates["login"]
+	if !ok {
+		http.Error(w, "template not found: login", 500)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := t.ExecuteTemplate(w, "login", LoginData{
+		AppVersion: appVersion,
+		SetupMode:  setupMode,
+		Error:      errMsg,
+		CSRFToken:  csrfToken,
+	}); err != nil {
+		http.Error(w, err.Error(), 500)
+	}
+}
+
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	cfg, _ := loadConfig()
+	setupMode := cfg.WebUIPasswordHash == ""
+
+	if r.Method != http.MethodPost {
+		// Already logged in — bounce to dashboard.
+		if !setupMode && sessionValid(r) {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		renderLogin(w, setupMode, "")
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		renderLogin(w, setupMode, "Could not read form.")
+		return
+	}
+
+	if setupMode {
+		newPass := r.FormValue("new_password")
+		confirm := r.FormValue("confirm_password")
+		if newPass != confirm {
+			renderLogin(w, true, "Passwords do not match.")
+			return
+		}
+		if len(newPass) < minPasswordLen {
+			renderLogin(w, true, fmt.Sprintf("Password must be at least %d characters.", minPasswordLen))
+			return
+		}
+		if len(newPass) > maxPasswordLen {
+			renderLogin(w, true, fmt.Sprintf("Password must be no more than %d characters.", maxPasswordLen))
+			return
+		}
+		hash, err := hashPassword(newPass)
+		if err != nil {
+			renderLogin(w, true, "Could not hash password: "+err.Error())
+			return
+		}
+		cfg.WebUIPasswordHash = hash
+		if err := saveConfig(cfg); err != nil {
+			renderLogin(w, true, "Could not save password: "+err.Error())
+			return
+		}
+		logEvent("[Auth] Web UI password set")
+		createSession(w)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	pass := r.FormValue("password")
+	if !checkPassword(cfg.WebUIPasswordHash, pass) {
+		appLog("[Auth] Failed login from %s", r.RemoteAddr)
+		renderLogin(w, false, "Incorrect password.")
+		return
+	}
+	createSession(w)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	destroySession(r, w)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func handleFavicon(w http.ResponseWriter, r *http.Request) {
@@ -733,4 +849,9 @@ func loadTemplates() {
 		))
 		pageTemplates[p] = t
 	}
+	// Login is rendered standalone (no sidebar, no layout wrapper).
+	pageTemplates["login"] = template.Must(template.New("").ParseFS(
+		templateFS,
+		"templates/login.html",
+	))
 }

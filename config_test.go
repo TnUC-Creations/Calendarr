@@ -38,6 +38,28 @@ func TestNormalizeWebBindAddress(t *testing.T) {
 	}
 }
 
+func TestSanitizedIgnoredShowsFile(t *testing.T) {
+	tests := map[string]string{
+		"":                                "ignored_shows.json",
+		"  ":                              "ignored_shows.json",
+		"ignored_shows.json":              "ignored_shows.json",
+		"my_list.json":                    "my_list.json",
+		`C:\Windows\Temp\evil.txt`:        "ignored_shows.json",
+		"/etc/passwd":                     "ignored_shows.json",
+		`..\..\evil.txt`:                  "ignored_shows.json",
+		"../etc/passwd":                   "ignored_shows.json",
+		"sub/dir/file.json":               "ignored_shows.json",
+		`sub\dir\file.json`:               "ignored_shows.json",
+		".":                               "ignored_shows.json",
+		"..":                              "ignored_shows.json",
+	}
+	for input, want := range tests {
+		if got := sanitizedIgnoredShowsFile(input); got != want {
+			t.Fatalf("sanitizedIgnoredShowsFile(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestNormalizeCalendarTargetsMigratesLegacyCalendarID(t *testing.T) {
 	cfg := Config{CalendarID: "movies", UseRadarr: true, UseSonarr: false}
 

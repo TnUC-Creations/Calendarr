@@ -1,0 +1,137 @@
+{{define "login"}}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <script>(function(){var t=localStorage.getItem('calendarr-theme');if(t)document.documentElement.setAttribute('data-bs-theme',t);})();</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{if .SetupMode}}Set Web UI Password{{else}}Sign in{{end}} — Calendarr</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #141920;
+            --bg-card: #1c2333;
+            --border:  #30363d;
+            --accent:  #e84393;
+            --accent-hover: #c7327e;
+            --text:    #c9d1d9;
+            --text-muted: #8b949e;
+        }
+        [data-bs-theme="light"] {
+            --bg-deep: #f6f8fa;
+            --bg-card: #ffffff;
+            --border: #d0d7de;
+            --text: #1f2328;
+            --text-muted: #57606a;
+        }
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .login-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 380px;
+            padding: 2rem;
+        }
+        .login-brand {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .login-brand h1 {
+            margin: 0;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .login-brand .accent { color: var(--accent); }
+        .login-brand p {
+            margin: 0.25rem 0 0;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .form-control {
+            background-color: var(--bg-deep);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        .form-control:focus {
+            background-color: var(--bg-deep);
+            border-color: var(--accent);
+            color: var(--text);
+            box-shadow: 0 0 0 0.2rem rgba(232,67,147,0.2);
+        }
+        .btn-primary {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background-color: var(--accent-hover);
+            border-color: var(--accent-hover);
+        }
+        .login-footer {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .alert { font-size: 0.88rem; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-brand">
+            <h1>Calenda<span class="accent">rr</span></h1>
+            <p>{{if .SetupMode}}First-time Web UI setup{{else}}Sign in to continue{{end}}</p>
+        </div>
+
+        {{if .Error}}
+        <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
+        {{end}}
+
+        {{if .SetupMode}}
+        <p class="text-muted mb-3" style="font-size:0.85rem;">
+            LAN access is enabled but no Web UI password is set. Set one now to protect this interface.
+        </p>
+        <form method="post" action="/login">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <div class="mb-3">
+                <label for="new_password" class="form-label" style="font-size:0.88rem;">New password</label>
+                <input type="password" class="form-control" name="new_password" id="new_password"
+                       autocomplete="new-password" minlength="8" maxlength="72" required autofocus>
+            </div>
+            <div class="mb-3">
+                <label for="confirm_password" class="form-label" style="font-size:0.88rem;">Confirm password</label>
+                <input type="password" class="form-control" name="confirm_password" id="confirm_password"
+                       autocomplete="new-password" minlength="8" maxlength="72" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Set Password &amp; Sign in</button>
+        </form>
+        {{else}}
+        <form method="post" action="/login">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <div class="mb-3">
+                <label for="password" class="form-label" style="font-size:0.88rem;">Password</label>
+                <input type="password" class="form-control" name="password" id="password"
+                       autocomplete="current-password" required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary">Sign in</button>
+        </form>
+        {{end}}
+
+        <div class="login-footer">v{{.AppVersion}}</div>
+    </div>
+</body>
+</html>
+{{end}}

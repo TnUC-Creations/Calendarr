@@ -498,6 +498,73 @@
     </div>
 </form>
 
+<!-- Web UI Security -->
+<hr class="my-4" style="border-color:var(--border);">
+<h5 class="mb-3" style="color:var(--text);"><i class="bi bi-shield-lock"></i> Web UI Security</h5>
+<div class="row g-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <span>Web UI Password</span>
+                {{if .Config.WebUIPasswordHash}}
+                    <span class="badge bg-success">Set</span>
+                {{else}}
+                    <span class="badge bg-secondary">Not set</span>
+                {{end}}
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3" style="font-size:0.88rem;">
+                    Required when Web UI Access is set to <strong>Local network</strong>.
+                    Optional but recommended even on Local only.
+                    A service restart logs everyone out, so set this once and you should not need to change it often.
+                </p>
+                <div class="row g-3 align-items-end">
+                    {{if .Config.WebUIPasswordHash}}
+                    <div class="col-md-3">
+                        <label class="form-label">
+                            Current Password
+                            <button type="button" class="help-btn" data-bs-toggle="popover"
+                                data-bs-placement="right" data-bs-title="Current Password"
+                                data-bs-content="Required to change or remove the existing Web UI password.">
+                                <i class="bi bi-question-circle"></i></button>
+                        </label>
+                        <input type="password" class="form-control" id="webui-old-password"
+                               autocomplete="current-password">
+                    </div>
+                    {{end}}
+                    <div class="col-md-3">
+                        <label class="form-label">
+                            New Password
+                            <button type="button" class="help-btn" data-bs-toggle="popover"
+                                data-bs-placement="right" data-bs-title="New Password"
+                                data-bs-content="Minimum 8 characters, maximum 72.">
+                                <i class="bi bi-question-circle"></i></button>
+                        </label>
+                        <input type="password" class="form-control" id="webui-new-password"
+                               autocomplete="new-password" minlength="8" maxlength="72">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="webui-confirm-password"
+                               autocomplete="new-password" minlength="8" maxlength="72">
+                    </div>
+                    <div class="col-md-3 d-flex flex-column gap-2">
+                        <button type="button" class="btn btn-primary btn-sm" id="webui-set-password-btn">
+                            <i class="bi bi-shield-lock"></i> {{if .Config.WebUIPasswordHash}}Change Password{{else}}Set Password{{end}}
+                        </button>
+                        {{if .Config.WebUIPasswordHash}}
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="webui-clear-password-btn">
+                            <i class="bi bi-x-circle"></i> Remove Password
+                        </button>
+                        {{end}}
+                    </div>
+                </div>
+                <div id="webui-password-status" class="mt-2" style="font-size:0.85rem; min-height:1.2rem;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Backup / Restore -->
 <hr class="my-4" style="border-color:var(--border);">
 <h5 class="mb-3" style="color:var(--text);"><i class="bi bi-archive"></i> Backup &amp; Restore</h5>
@@ -528,13 +595,22 @@
                     Upload a <code>.zip</code> backup to restore your settings and ignored shows list.
                     <strong>This overwrites your current config immediately.</strong>
                 </p>
-                <form method="post" action="/restore" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+                <form method="post" action="/restore" enctype="multipart/form-data" class="d-flex gap-2 align-items-center" id="restore-form">
                     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-                    <input type="file" class="form-control form-control-sm" name="config_file" accept=".zip" style="max-width:280px;">
-                    <button type="submit" class="btn btn-outline-warning btn-sm">
+                    <input type="file" class="form-control form-control-sm" name="config_file" accept=".zip" style="max-width:280px;" id="restore-file" required>
+                    <button type="submit" class="btn btn-outline-warning btn-sm" id="restore-submit" disabled>
                         <i class="bi bi-upload"></i> Restore
                     </button>
                 </form>
+                <script>
+                (function () {
+                    var f = document.getElementById('restore-file');
+                    var b = document.getElementById('restore-submit');
+                    if (f && b) {
+                        f.addEventListener('change', function () { b.disabled = !f.files || f.files.length === 0; });
+                    }
+                })();
+                </script>
             </div>
         </div>
     </div>
@@ -1052,6 +1128,94 @@ function testConn(service, btn) {
             resultEl.textContent = 'Failed';
             btn.disabled = false; btn.innerHTML = orig;
         });
+}
+
+// ---- Web UI password management --------------------------------------------
+function webuiPasswordStatus(text, kind) {
+    const el = document.getElementById('webui-password-status');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'mt-2 text-' + (kind || 'muted');
+    el.style.fontSize = '0.85rem';
+}
+
+const setPasswordBtn = document.getElementById('webui-set-password-btn');
+if (setPasswordBtn) {
+    setPasswordBtn.addEventListener('click', () => {
+        const oldEl = document.getElementById('webui-old-password');
+        const newEl = document.getElementById('webui-new-password');
+        const confirmEl = document.getElementById('webui-confirm-password');
+        const newVal = newEl.value;
+        const confirmVal = confirmEl.value;
+        if (newVal.length < 8) {
+            webuiPasswordStatus('New password must be at least 8 characters.', 'danger');
+            return;
+        }
+        if (newVal !== confirmVal) {
+            webuiPasswordStatus('New passwords do not match.', 'danger');
+            return;
+        }
+        webuiPasswordStatus('Saving...', 'muted');
+        setPasswordBtn.disabled = true;
+        csrfFetch('/api/auth/password', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                old_password: oldEl ? oldEl.value : '',
+                new_password: newVal,
+            }),
+        })
+            .then(r => r.json().then(d => ({status: r.status, body: d})))
+            .then(({status, body}) => {
+                setPasswordBtn.disabled = false;
+                if (body.ok) {
+                    webuiPasswordStatus(body.message || 'Password updated. Reload the page to see updated state.', 'success');
+                    if (oldEl) oldEl.value = '';
+                    newEl.value = '';
+                    confirmEl.value = '';
+                    setTimeout(() => window.location.reload(), 1200);
+                } else {
+                    webuiPasswordStatus(body.message || ('HTTP ' + status), 'danger');
+                }
+            })
+            .catch(err => {
+                setPasswordBtn.disabled = false;
+                webuiPasswordStatus('Request failed: ' + err, 'danger');
+            });
+    });
+}
+
+const clearPasswordBtn = document.getElementById('webui-clear-password-btn');
+if (clearPasswordBtn) {
+    clearPasswordBtn.addEventListener('click', () => {
+        const oldEl = document.getElementById('webui-old-password');
+        if (!oldEl || !oldEl.value) {
+            webuiPasswordStatus('Enter your current password to remove it.', 'danger');
+            return;
+        }
+        if (!confirm('Remove the Web UI password? Anyone who can reach the local web UI will then have full access.')) return;
+        webuiPasswordStatus('Removing...', 'muted');
+        clearPasswordBtn.disabled = true;
+        csrfFetch('/api/auth/password/clear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({old_password: oldEl.value}),
+        })
+            .then(r => r.json().then(d => ({status: r.status, body: d})))
+            .then(({status, body}) => {
+                clearPasswordBtn.disabled = false;
+                if (body.ok) {
+                    webuiPasswordStatus('Password removed. Reloading...', 'success');
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    webuiPasswordStatus(body.message || ('HTTP ' + status), 'danger');
+                }
+            })
+            .catch(err => {
+                clearPasswordBtn.disabled = false;
+                webuiPasswordStatus('Request failed: ' + err, 'danger');
+            });
+    });
 }
 </script>
 {{end}}

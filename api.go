@@ -117,6 +117,96 @@ func apiGoogleDisconnect(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{"ok": true})
 }
 
+// ---- /api/auth/password -----------------------------------------------------
+
+func apiSetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", 405)
+		return
+	}
+	var body struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	if cfg.WebUIPasswordHash != "" {
+		if !checkPassword(cfg.WebUIPasswordHash, body.OldPassword) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
+			return
+		}
+	}
+	if len(body.NewPassword) < minPasswordLen {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("Password must be at least %d characters.", minPasswordLen)})
+		return
+	}
+	if len(body.NewPassword) > maxPasswordLen {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("Password must be no more than %d characters.", maxPasswordLen)})
+		return
+	}
+	hash, err := hashPassword(body.NewPassword)
+	if err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	cfg.WebUIPasswordHash = hash
+	if err := saveConfig(cfg); err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	logEvent("[Auth] Web UI password changed")
+	jsonOK(w, map[string]interface{}{"ok": true, "message": "Password updated."})
+}
+
+func apiClearPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", 405)
+		return
+	}
+	var body struct {
+		OldPassword string `json:"old_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	if cfg.WebUIPasswordHash == "" {
+		jsonOK(w, map[string]interface{}{"ok": true})
+		return
+	}
+	if !checkPassword(cfg.WebUIPasswordHash, body.OldPassword) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
+		return
+	}
+	if cfg.WebBindAddress == "0.0.0.0" {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": "Cannot remove the password while LAN access is enabled. Switch to Local only first."})
+		return
+	}
+	cfg.WebUIPasswordHash = ""
+	if err := saveConfig(cfg); err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	logEvent("[Auth] Web UI password removed")
+	jsonOK(w, map[string]interface{}{"ok": true, "message": "Password removed."})
+}
+
 // ---- /api/run ---------------------------------------------------------------
 
 func apiRun(w http.ResponseWriter, r *http.Request) {
@@ -233,6 +323,10 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	applySettingsForm(&cfg, r)
+	if cfg.WebBindAddress == "0.0.0.0" && cfg.WebUIPasswordHash == "" {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": "Set a Web UI password before enabling Local network access."})
+		return
+	}
 	if err := saveConfig(cfg); err != nil {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return

@@ -19,6 +19,25 @@ func dataPath(rel string) string {
 	return filepath.Join(dataDir, rel)
 }
 
+// sanitizedIgnoredShowsFile constrains the ignored shows filename to a single
+// safe basename inside the data directory. It rejects absolute paths, traversal
+// segments, and any embedded path separator. Anything suspicious falls back to
+// the default name.
+func sanitizedIgnoredShowsFile(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "ignored_shows.json"
+	}
+	if filepath.IsAbs(name) || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+		return "ignored_shows.json"
+	}
+	cleaned := filepath.Clean(name)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "..") {
+		return "ignored_shows.json"
+	}
+	return cleaned
+}
+
 // Config mirrors config.json exactly. Bool fields default to true via defaultConfig()
 // so that missing keys in an existing config.json are handled gracefully.
 type Config struct {
@@ -63,6 +82,8 @@ type Config struct {
 	MaxLogFiles       int  `json:"max_log_files"`
 	MaxHistoryEntries int  `json:"max_history_entries"`
 	AutoCleanupPast   bool `json:"auto_cleanup_past"`
+
+	WebUIPasswordHash string `json:"web_ui_password_hash"`
 }
 
 const maxCalendarTargets = 5
@@ -188,9 +209,7 @@ func loadConfig() (Config, error) {
 		cfg.WebPort = 5000
 	}
 	cfg.WebBindAddress = normalizeWebBindAddress(cfg.WebBindAddress)
-	if cfg.IgnoredShowsFile == "" {
-		cfg.IgnoredShowsFile = "ignored_shows.json"
-	}
+	cfg.IgnoredShowsFile = sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)
 	if cfg.MovieTheaterTemplate == "" {
 		cfg.MovieTheaterTemplate = "{title} Theater Release"
 	}
@@ -212,6 +231,7 @@ func loadConfig() (Config, error) {
 
 func saveConfig(cfg Config) error {
 	cfg.WebBindAddress = normalizeWebBindAddress(cfg.WebBindAddress)
+	cfg.IgnoredShowsFile = sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)
 	normalizeCalendarTargets(&cfg)
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

@@ -35,8 +35,17 @@ func csrfMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		ct := strings.ToLower(r.Header.Get("Content-Type"))
-		if strings.HasPrefix(ct, "application/x-www-form-urlencoded") || strings.HasPrefix(ct, "multipart/form-data") {
+		switch {
+		case strings.HasPrefix(ct, "application/x-www-form-urlencoded"):
 			if err := r.ParseForm(); err == nil && validCSRFToken(r.FormValue(csrfFieldName)) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		case strings.HasPrefix(ct, "multipart/form-data"):
+			// ParseForm does not read multipart bodies, so call ParseMultipartForm
+			// directly; otherwise FormValue("_csrf") returns empty and every
+			// multipart POST fails CSRF.
+			if err := r.ParseMultipartForm(10 << 20); err == nil && validCSRFToken(r.FormValue(csrfFieldName)) {
 				next.ServeHTTP(w, r)
 				return
 			}
