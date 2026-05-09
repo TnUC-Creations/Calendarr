@@ -451,7 +451,7 @@ func apiUpdateCheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
-	go checkForUpdates()
+	go checkForUpdates(updateCheckManual)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Check started"})
 }
 

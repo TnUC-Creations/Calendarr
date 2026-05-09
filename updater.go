@@ -23,6 +23,7 @@ const (
 // UpdateState holds the result of the most recent update check.
 type UpdateState struct {
 	Available   bool
+	LatestTag   string
 	LatestVer   string
 	DownloadURL string
 	ChecksumURL string
@@ -35,6 +36,13 @@ type UpdateState struct {
 var (
 	updateState UpdateState
 	updateMu    sync.RWMutex
+)
+
+type updateCheckMode int
+
+const (
+	updateCheckBackground updateCheckMode = iota
+	updateCheckManual
 )
 
 func getUpdateState() UpdateState {
@@ -79,7 +87,7 @@ type githubRelease struct {
 }
 
 // checkForUpdates queries the GitHub Releases API and updates updateState.
-func checkForUpdates() {
+func checkForUpdates(mode updateCheckMode) {
 	updateMu.Lock()
 	updateState.Checking = true
 	updateState.Error = ""
@@ -144,6 +152,8 @@ func checkForUpdates() {
 		return
 	}
 
+	release.TagName = strings.TrimSpace(release.TagName)
+	newState.LatestTag = release.TagName
 	newState.LatestVer = strings.TrimPrefix(release.TagName, "v")
 	newState.ReleaseURL = release.HTMLURL
 	newState.Available = versionNewer(release.TagName, appVersion)
@@ -156,8 +166,15 @@ func checkForUpdates() {
 			newState.ChecksumURL = asset.BrowserDownloadURL
 		}
 	}
-	if newState.Available && newState.ChecksumURL == "" {
-		newState.Error = "Release is missing calendarr.exe.sha256. In-app update is blocked until a checksum asset is published."
+	if newState.Available && (newState.DownloadURL == "" || newState.ChecksumURL == "") {
+		switch {
+		case newState.DownloadURL == "" && newState.ChecksumURL == "":
+			newState.Error = "Release is missing calendarr.exe and calendarr.exe.sha256. In-app update is blocked until both assets are published."
+		case newState.DownloadURL == "":
+			newState.Error = "Release is missing calendarr.exe. In-app update is blocked until the executable asset is published."
+		default:
+			newState.Error = "Release is missing calendarr.exe.sha256. In-app update is blocked until a checksum asset is published."
+		}
 		logEvent("[Updater] Check warning: " + newState.Error)
 	}
 
@@ -170,16 +187,92 @@ func checkForUpdates() {
 	updateMu.Lock()
 	updateState = newState
 	updateMu.Unlock()
+
+	if newState.Available {
+		notifyUpdateAvailable(newState, mode)
+	}
 }
 
 // backgroundUpdateChecker runs checkForUpdates after a short startup delay,
 // then repeats every 24 hours.
 func backgroundUpdateChecker() {
 	time.Sleep(30 * time.Second) // let the app finish starting up first
-	checkForUpdates()
+	checkForUpdates(updateCheckBackground)
 	for {
 		time.Sleep(updateCheckInterval)
-		checkForUpdates()
+		checkForUpdates(updateCheckBackground)
+	}
+}
+
+type updatePushoverDecision struct {
+	Send    bool
+	Reason  string
+	Message string
+}
+
+func decideUpdatePushover(cfg Config, state UpdateState, mode updateCheckMode) updatePushoverDecision {
+	if !state.Available {
+		return updatePushoverDecision{Reason: "no update available"}
+	}
+	if mode != updateCheckBackground {
+		return updatePushoverDecision{Reason: "manual check"}
+	}
+	if !cfg.UsePushover || !cfg.PushoverOnUpdate {
+		return updatePushoverDecision{Reason: "disabled"}
+	}
+	if strings.TrimSpace(cfg.PushoverToken) == "" || strings.TrimSpace(cfg.PushoverUser) == "" {
+		return updatePushoverDecision{Reason: "credentials missing"}
+	}
+	if state.DownloadURL == "" || state.ChecksumURL == "" {
+		return updatePushoverDecision{Reason: "not installable"}
+	}
+	if state.LatestTag != "" && state.LatestTag == cfg.LastUpdatePushoverTag {
+		return updatePushoverDecision{Reason: "already notified"}
+	}
+
+	latest := state.LatestVer
+	if latest == "" {
+		latest = strings.TrimPrefix(state.LatestTag, "v")
+	}
+	msg := fmt.Sprintf("Calendarr update available: v%s -> v%s", appVersion, latest)
+	if state.ReleaseURL != "" {
+		msg += "\n" + state.ReleaseURL
+	}
+	return updatePushoverDecision{Send: true, Reason: "enabled", Message: msg}
+}
+
+func notifyUpdateAvailable(state UpdateState, mode updateCheckMode) {
+	cfg, err := loadConfig()
+	if err != nil {
+		logEvent("[Pushover] Update notification: could not load settings - " + err.Error())
+		return
+	}
+
+	decision := decideUpdatePushover(cfg, state, mode)
+	switch decision.Reason {
+	case "manual check":
+		logEvent("[Pushover] Update notification: manual check - skipped")
+	case "disabled":
+		logEvent("[Pushover] Update notification: DISABLED")
+	case "credentials missing":
+		logEvent("[Pushover] Update notification: ENABLED but credentials missing - skipped")
+	case "not installable":
+		logEvent("[Pushover] Update notification: update exists but is not installable through the in-app updater - skipped")
+	case "already notified":
+		logEvent("[Pushover] Update notification: already notified for " + state.LatestTag)
+	case "enabled":
+		logEvent("[Pushover] Update notification: ENABLED - sending")
+		sendPushover(cfg.PushoverToken, cfg.PushoverUser, decision.Message, cfg.PushoverSound)
+		tag := state.LatestTag
+		if tag == "" {
+			tag = "v" + state.LatestVer
+		}
+		if err := mutateConfig(func(c *Config) error {
+			c.LastUpdatePushoverTag = tag
+			return nil
+		}); err != nil {
+			logEvent("[Pushover] Update notification: could not save notified version - " + err.Error())
+		}
 	}
 }
 

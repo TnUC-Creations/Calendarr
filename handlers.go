@@ -356,6 +356,7 @@ func applySettingsForm(cfg *Config, r *http.Request) {
 	cfg.PushoverOnUpdated = r.FormValue("pushover_on_updated") != ""
 	cfg.PushoverOnDeleted = r.FormValue("pushover_on_deleted") != ""
 	cfg.PushoverOnError = r.FormValue("pushover_on_error") != ""
+	cfg.PushoverOnUpdate = r.FormValue("pushover_on_update_available") != ""
 	cfg.SyncOnStart = r.FormValue("sync_on_start") != ""
 	cfg.AutoCleanupPast = r.FormValue("auto_cleanup_past") != ""
 	cfg.WebBindAddress = normalizeWebBindAddress(r.FormValue("web_bind_address"))

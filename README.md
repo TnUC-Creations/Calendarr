@@ -12,7 +12,7 @@ I originally made a small Python script years ago to solve this for my own setup
 - Runs quietly as a Windows service.
 - Local web UI for settings, logs, history, ignored shows, preview changes, cleanup, and updates.
 - Google OAuth support with selectable calendars.
-- Optional Pushover notifications for added, updated, or deleted events.
+- Optional Pushover notifications for added, updated, deleted, failed sync, or available update events.
 - Custom event title templates for movies and episodes.
 - Ignored shows list with automatic cleanup of unwanted events.
 - Built-in update checker for GitHub releases.

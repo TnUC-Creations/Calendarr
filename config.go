@@ -66,14 +66,16 @@ type Config struct {
 	CalendarTargets    []CalendarTarget `json:"calendar_targets"`
 	GoogleRefreshToken string           `json:"google_refresh_token"`
 
-	PushoverToken     string `json:"pushover_app_token"`
-	PushoverUser      string `json:"pushover_user_key"`
-	PushoverSound     string `json:"pushover_sound"`
-	UsePushover       bool   `json:"use_pushover"`
-	PushoverOnAdded   bool   `json:"pushover_on_added"`
-	PushoverOnUpdated bool   `json:"pushover_on_updated"`
-	PushoverOnDeleted bool   `json:"pushover_on_deleted"`
-	PushoverOnError   bool   `json:"pushover_on_error"`
+	PushoverToken         string `json:"pushover_app_token"`
+	PushoverUser          string `json:"pushover_user_key"`
+	PushoverSound         string `json:"pushover_sound"`
+	UsePushover           bool   `json:"use_pushover"`
+	PushoverOnAdded       bool   `json:"pushover_on_added"`
+	PushoverOnUpdated     bool   `json:"pushover_on_updated"`
+	PushoverOnDeleted     bool   `json:"pushover_on_deleted"`
+	PushoverOnError       bool   `json:"pushover_on_error"`
+	PushoverOnUpdate      bool   `json:"pushover_on_update_available"`
+	LastUpdatePushoverTag string `json:"last_update_pushover_tag"`
 
 	RunIntervalHours float64 `json:"run_interval_hours"`
 	WebPort          int     `json:"web_port"`

@@ -44,6 +44,24 @@ func TestApplySettingsFormPreservesCalendarTargetsWhenTargetsAbsent(t *testing.T
 	}
 }
 
+func TestApplySettingsFormPersistsPushoverUpdateAvailable(t *testing.T) {
+	cfg := defaultConfig()
+	form := url.Values{
+		"pushover_on_update_available": {"on"},
+	}
+	req := httptest.NewRequest("POST", "/api/settings/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := parseSettingsRequest(req); err != nil {
+		t.Fatalf("parseSettingsRequest: %v", err)
+	}
+
+	applySettingsForm(&cfg, req)
+
+	if !cfg.PushoverOnUpdate {
+		t.Fatal("PushoverOnUpdate = false, want true")
+	}
+}
+
 func TestParseSettingsRequestParsesMultipartAutosave(t *testing.T) {
 	body := strings.NewReader("--x\r\nContent-Disposition: form-data; name=\"radarr_url\"\r\n\r\nhttp://radarr/api/v3\r\n--x--\r\n")
 	req := httptest.NewRequest("POST", "/api/settings/save", body)

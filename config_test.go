@@ -20,6 +20,9 @@ func TestDefaultConfigReleaseOffsetsAndRadarrTracking(t *testing.T) {
 	if cfg.WebBindAddress != "127.0.0.1" {
 		t.Fatalf("web bind address = %q, want 127.0.0.1", cfg.WebBindAddress)
 	}
+	if cfg.PushoverOnUpdate {
+		t.Fatal("PushoverOnUpdate = true, want false by default")
+	}
 }
 
 func TestNormalizeWebBindAddress(t *testing.T) {
@@ -40,18 +43,18 @@ func TestNormalizeWebBindAddress(t *testing.T) {
 
 func TestSanitizedIgnoredShowsFile(t *testing.T) {
 	tests := map[string]string{
-		"":                                "ignored_shows.json",
-		"  ":                              "ignored_shows.json",
-		"ignored_shows.json":              "ignored_shows.json",
-		"my_list.json":                    "my_list.json",
-		`C:\Windows\Temp\evil.txt`:        "ignored_shows.json",
-		"/etc/passwd":                     "ignored_shows.json",
-		`..\..\evil.txt`:                  "ignored_shows.json",
-		"../etc/passwd":                   "ignored_shows.json",
-		"sub/dir/file.json":               "ignored_shows.json",
-		`sub\dir\file.json`:               "ignored_shows.json",
-		".":                               "ignored_shows.json",
-		"..":                              "ignored_shows.json",
+		"":                         "ignored_shows.json",
+		"  ":                       "ignored_shows.json",
+		"ignored_shows.json":       "ignored_shows.json",
+		"my_list.json":             "my_list.json",
+		`C:\Windows\Temp\evil.txt`: "ignored_shows.json",
+		"/etc/passwd":              "ignored_shows.json",
+		`..\..\evil.txt`:           "ignored_shows.json",
+		"../etc/passwd":            "ignored_shows.json",
+		"sub/dir/file.json":        "ignored_shows.json",
+		`sub\dir\file.json`:        "ignored_shows.json",
+		".":                        "ignored_shows.json",
+		"..":                       "ignored_shows.json",
 	}
 	for input, want := range tests {
 		if got := sanitizedIgnoredShowsFile(input); got != want {

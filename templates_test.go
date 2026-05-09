@@ -15,6 +15,28 @@ func TestLoadTemplates(t *testing.T) {
 	}
 }
 
+func TestSettingsTemplateRendersPushoverUpdateCheckbox(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := SettingsData{
+		PageBase: PageBase{
+			CSRFToken:   "test-token",
+			CurrentPage: "settings",
+		},
+		Config: Config{PushoverOnUpdate: true},
+	}
+	if err := pageTemplates["settings"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if !strings.Contains(html, `name="pushover_on_update_available"`) {
+		t.Fatal("settings template did not render pushover_on_update_available checkbox")
+	}
+	if !strings.Contains(html, `id="pushover_on_update_available"`) {
+		t.Fatal("settings template did not render pushover_on_update_available id")
+	}
+}
+
 func TestAboutChangelogShowsFiveRecentVersions(t *testing.T) {
 	data, err := os.ReadFile("templates/about.html")
 	if err != nil {

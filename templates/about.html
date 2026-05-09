@@ -308,6 +308,17 @@
     <div class="card-body p-0">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.7.1</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Added an optional Pushover alert when a new Calendarr update is available.</li>
+                <li>Update alerts are sent only once per version and only when the release can be installed by the in-app updater.</li>
+                <li>The About page Check Now button still checks for updates without sending a Pushover alert.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.7.0</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
@@ -353,9 +364,15 @@
                 <li>Added a shameless donation link to the About page. No pressure, but the coffee helps.</li>
             </ul>
         </div>
+        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
+                <i class="bi bi-chevron-down me-1"></i>Show older versions
+            </button>
+        </div>
+        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="badge bg-primary px-2">v1.5.7</span>
+                <span class="badge bg-secondary px-2">v1.5.7</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
             <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
@@ -363,12 +380,6 @@
                 <li>Added an optional desktop shortcut choice during setup.</li>
             </ul>
         </div>
-        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
-            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
-                <i class="bi bi-chevron-down me-1"></i>Show older versions
-            </button>
-        </div>
-        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-secondary px-2">v1.5.6</span>
