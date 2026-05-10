@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -106,6 +107,7 @@ const oauthStateTTL = 10 * time.Minute
 var (
 	oauthStates   = map[string]time.Time{}
 	oauthStatesMu sync.Mutex
+	activeWebPort int
 )
 
 func newOAuthState() (string, error) {
@@ -148,14 +150,32 @@ func consumeOAuthState(state string) bool {
 func callbackURI() string {
 	cfg, _ := loadConfig()
 	port := cfg.WebPort
+	if activeWebPort > 0 {
+		port = activeWebPort
+	}
 	if port <= 0 {
 		port = 5000
 	}
 	return fmt.Sprintf("http://localhost:%d/oauth/callback", port)
 }
 
+func requestFromLocalhost(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // handleOAuthStart redirects the browser to Google's consent screen.
 func handleOAuthStart(w http.ResponseWriter, r *http.Request) {
+	if !requestFromLocalhost(r) {
+		setFlash(w, "danger", "Google Calendar must be connected from a browser on the Calendarr server. Open "+callbackBaseURL()+" on that computer and try again.")
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+
 	state, err := newOAuthState()
 	if err != nil {
 		setFlash(w, "danger", "Could not start Google authorization: "+err.Error())
@@ -167,6 +187,18 @@ func handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		oauth2.ApprovalForce,
 	)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+}
+
+func callbackBaseURL() string {
+	cfg, _ := loadConfig()
+	port := cfg.WebPort
+	if activeWebPort > 0 {
+		port = activeWebPort
+	}
+	if port <= 0 {
+		port = 5000
+	}
+	return fmt.Sprintf("http://localhost:%d", port)
 }
 
 // handleOAuthCallback receives the redirect from Google after the user

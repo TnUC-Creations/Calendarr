@@ -19,7 +19,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.9.0"
+	appVersion = "1.10.0"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -410,6 +410,7 @@ func startApp() {
 	}
 	logEvent(fmt.Sprintf("[Startup] Calendarr v%s | %s/%s | bind %s:%d | data: %s",
 		appVersion, runtime.GOOS, runtime.GOARCH, cfg.WebBindAddress, cfg.WebPort, dataDirLabel))
+	activeWebPort = cfg.WebPort
 
 	safeGo(backgroundScheduler)
 	safeGo(backgroundUpdateChecker)

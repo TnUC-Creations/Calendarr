@@ -18,6 +18,16 @@ func jsonOK(w http.ResponseWriter, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
+func jsonStatus(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+func jsonError(w http.ResponseWriter, status int, msg string) {
+	jsonStatus(w, status, map[string]interface{}{"ok": false, "message": msg})
+}
+
 // ---- /api/status ------------------------------------------------------------
 
 func apiStatus(w http.ResponseWriter, r *http.Request) {
@@ -53,11 +63,11 @@ func apiPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	s := getPreviewState()
 	if s.Running {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "Preview already in progress."})
+		jsonError(w, http.StatusConflict, "Preview already in progress.")
 		return
 	}
 	if isRunning() {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "A sync is running. Try again once it finishes."})
+		jsonError(w, http.StatusConflict, "A sync is running. Try again once it finishes.")
 		return
 	}
 	cfg, _ := loadConfig()
@@ -135,20 +145,20 @@ func apiSetPassword(w http.ResponseWriter, r *http.Request) {
 			writeTooLarge(w, "Request body too large.")
 			return
 		}
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
 		return
 	}
 	if len(body.NewPassword) < minPasswordLen {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("Password must be at least %d characters.", minPasswordLen)})
+		jsonError(w, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters.", minPasswordLen))
 		return
 	}
 	if len(body.NewPassword) > maxPasswordLen {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("Password must be no more than %d characters.", maxPasswordLen)})
+		jsonError(w, http.StatusBadRequest, fmt.Sprintf("Password must be no more than %d characters.", maxPasswordLen))
 		return
 	}
 	hash, err := hashPassword(body.NewPassword)
 	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	var unauthorized bool
@@ -162,15 +172,15 @@ func apiSetPassword(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if unauthorized {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
+			jsonError(w, http.StatusUnauthorized, "Current password is incorrect.")
 			return
 		}
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	logEvent("[Auth] Web UI password changed")
+	clearSessions()
+	createSession(w)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Password updated."})
 }
 
@@ -188,7 +198,7 @@ func apiClearPassword(w http.ResponseWriter, r *http.Request) {
 			writeTooLarge(w, "Request body too large.")
 			return
 		}
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
 		return
 	}
 	var unauthorized, alreadyClear, lanBlocked bool
@@ -214,19 +224,19 @@ func apiClearPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if unauthorized {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"ok":false,"message":"Current password is incorrect."}`))
+			jsonError(w, http.StatusUnauthorized, "Current password is incorrect.")
 			return
 		}
 		if lanBlocked {
-			jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+			jsonError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	logEvent("[Auth] Web UI password removed")
+	clearSessions()
+	destroySession(r, w)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Password removed."})
 }
 
@@ -238,7 +248,7 @@ func apiRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !runSyncJob() {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "Already running"})
+		jsonError(w, http.StatusConflict, "Already running")
 		return
 	}
 	logEvent("[UI] Manual sync triggered")
@@ -272,7 +282,7 @@ func apiCleanup(w http.ResponseWriter, r *http.Request) {
 
 	cs := getCleanupState()
 	if cs.Running {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "Cleanup already in progress."})
+		jsonError(w, http.StatusConflict, "Cleanup already in progress.")
 		return
 	}
 	setCleanupRunning()
@@ -300,13 +310,13 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		adminLog("Target cleanup rejected", err.Error())
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
 		return
 	}
 
 	cs := getCleanupState()
 	if cs.Running {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "Cleanup already in progress."})
+		jsonError(w, http.StatusConflict, "Cleanup already in progress.")
 		return
 	}
 	setCleanupRunning()
@@ -369,11 +379,15 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
+	var restartRequired bool
 	err := mutateConfig(func(c *Config) error {
+		oldBind := c.WebBindAddress
+		oldPort := c.WebPort
 		applySettingsForm(c, r)
 		if c.WebBindAddress == "0.0.0.0" && c.WebUIPasswordHash == "" {
 			return fmt.Errorf("Set a Web UI password before enabling Local network access.")
 		}
+		restartRequired = oldBind != c.WebBindAddress || oldPort != c.WebPort
 		return nil
 	})
 	if err != nil {
@@ -381,7 +395,11 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logEvent("[UI] Settings saved")
-	jsonOK(w, map[string]interface{}{"ok": true})
+	msg := "Saved"
+	if restartRequired {
+		msg = "Saved. Restart the Calendarr service for Web UI access or port changes to take effect."
+	}
+	jsonOK(w, map[string]interface{}{"ok": true, "message": msg, "restart_required": restartRequired})
 }
 
 func apiCleanupStatus(w http.ResponseWriter, r *http.Request) {
@@ -586,33 +604,44 @@ func apiTestRadarr(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		URL    string `json:"radarr_url"`
 		APIKey string `json:"radarr_api_key"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
+		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
+		return
+	}
 	if body.URL == "" || body.APIKey == "" {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "URL and API Key are required."})
+		jsonError(w, http.StatusBadRequest, "URL and API Key are required.")
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := newRequestWithKey("GET", body.URL+"/system/status", body.APIKey)
 	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("HTTP %d", resp.StatusCode)})
+		jsonError(w, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
 		return
 	}
 	var info map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&info)
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		jsonError(w, http.StatusBadGateway, "Could not read Radarr response.")
+		return
+	}
 	ver, _ := info["version"].(string)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Connected! Radarr v" + ver})
 }
@@ -622,33 +651,44 @@ func apiTestSonarr(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		URL    string `json:"sonarr_url"`
 		APIKey string `json:"sonarr_api_key"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
+		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
+		return
+	}
 	if body.URL == "" || body.APIKey == "" {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "URL and API Key are required."})
+		jsonError(w, http.StatusBadRequest, "URL and API Key are required.")
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := newRequestWithKey("GET", body.URL+"/system/status", body.APIKey)
 	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("HTTP %d", resp.StatusCode)})
+		jsonError(w, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
 		return
 	}
 	var info map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&info)
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		jsonError(w, http.StatusBadGateway, "Could not read Sonarr response.")
+		return
+	}
 	ver, _ := info["version"].(string)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Connected! Sonarr v" + ver})
 }
@@ -658,13 +698,21 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		Token string `json:"pushover_app_token"`
 		User  string `json:"pushover_user_key"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			return
+		}
+		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
+		return
+	}
 	if body.Token == "" || body.User == "" {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": "App Token and User Key are required."})
+		jsonError(w, http.StatusBadRequest, "App Token and User Key are required.")
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -673,12 +721,19 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		"user":  {body.User},
 	})
 	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		jsonError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		jsonError(w, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		return
+	}
 	var result map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		jsonError(w, http.StatusBadGateway, "Could not read Pushover response.")
+		return
+	}
 	if status, _ := result["status"].(float64); status == 1 {
 		jsonOK(w, map[string]interface{}{"ok": true, "message": "Credentials valid!"})
 		return
@@ -691,7 +746,7 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		}
 		msg = strings.Join(parts, ", ")
 	}
-	jsonOK(w, map[string]interface{}{"ok": false, "message": msg})
+	jsonError(w, http.StatusBadGateway, msg)
 }
 
 func apiTestCalendar(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,7 @@
 param(
     [string]$SecretFile = "release_secret.txt",
+    [string]$SigningKeyFile = "release_signing_private_key.txt",
+    [switch]$GenerateSigningKey,
     [switch]$SkipTests,
     [switch]$BuildInstaller
 )
@@ -10,9 +12,22 @@ $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $authPath = Join-Path $repoRoot "auth.go"
 $exePath = Join-Path $repoRoot "calendarr.exe"
 $checksumPath = Join-Path $repoRoot "calendarr.exe.sha256"
+$signaturePath = Join-Path $repoRoot "calendarr.exe.sig"
 $secretPath = Join-Path $repoRoot $SecretFile
+$signingKeyPath = Join-Path $repoRoot $SigningKeyFile
 $installerScriptPath = Join-Path $repoRoot "calendarr.iss"
 $placeholder = "REPLACE_WITH_RELEASE_GOOGLE_CLIENT_SECRET"
+
+if ($GenerateSigningKey) {
+    Push-Location $repoRoot
+    try {
+        go run ./tools/release_signer -generate -key $signingKeyPath
+    }
+    finally {
+        Pop-Location
+    }
+    return
+}
 
 if (-not (Test-Path -LiteralPath $secretPath)) {
     throw "Missing $SecretFile. Create it locally with the Google OAuth client secret. This file is ignored and must not be committed."
@@ -21,6 +36,10 @@ if (-not (Test-Path -LiteralPath $secretPath)) {
 $secret = (Get-Content -Raw -LiteralPath $secretPath).Trim()
 if ([string]::IsNullOrWhiteSpace($secret)) {
     throw "$SecretFile is empty."
+}
+
+if (-not (Test-Path -LiteralPath $signingKeyPath)) {
+    throw "Missing $SigningKeyFile. Run .\build_release.ps1 -GenerateSigningKey once, then back up the generated private key outside the repo."
 }
 
 $originalAuth = Get-Content -Raw -LiteralPath $authPath
@@ -42,6 +61,7 @@ try {
         Get-FileHash -Algorithm SHA256 $exePath |
             ForEach-Object { "$($_.Hash.ToLower())  calendarr.exe" } |
             Set-Content -LiteralPath $checksumPath -NoNewline
+        go run ./tools/release_signer -key $signingKeyPath -in $exePath -out $signaturePath
 
         if ($BuildInstaller) {
             $iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
@@ -66,7 +86,7 @@ if ($postBuildAuth -notlike "*$placeholder*") {
 }
 
 if ($BuildInstaller) {
-    Write-Host "Built calendarr.exe, calendarr.exe.sha256, and the installer."
+    Write-Host "Built calendarr.exe, calendarr.exe.sha256, calendarr.exe.sig, and the installer."
 } else {
-    Write-Host "Built calendarr.exe and calendarr.exe.sha256."
+    Write-Host "Built calendarr.exe, calendarr.exe.sha256, and calendarr.exe.sig."
 }

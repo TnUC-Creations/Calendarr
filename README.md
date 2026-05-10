@@ -37,6 +37,8 @@ http://localhost:5000
 
 The port can be changed later in Settings.
 
+By default the web UI listens only on the local machine. If you enable Local network access, Calendarr still serves the UI over plain HTTP unless you place it behind your own HTTPS reverse proxy or VPN such as Tailscale. Use Local network access only on networks you trust.
+
 ## First Setup
 
 1. Open Calendarr in a browser on the server machine.
@@ -56,6 +58,8 @@ Sonarr: http://localhost:8989/api/v3
 ## Google Calendar Notes
 
 Calendarr uses Google OAuth and stores a refresh token locally in its config file. It requests calendar event access so it can create, update, and delete the events it manages.
+
+Google Calendar connection must be started from a browser on the Calendarr server itself. Google redirects back to `http://localhost:<port>/oauth/callback`; if you start the flow from another computer on the LAN, that other computer's localhost will not be Calendarr.
 
 If a release changes dates in Radarr or Sonarr, the next sync should move the existing Google Calendar event back to the correct date.
 
@@ -85,16 +89,19 @@ Important files include:
 
 Do not share files that contain API keys, Google tokens, or personal calendar data.
 
+The Windows installer currently leaves the data folder broadly accessible to local Windows users. Treat any Windows account on the same machine as able to read or change Calendarr settings until the deferred installer permission change is completed.
+
 ## Updating
 
-Calendarr can check GitHub Releases for updates from the About page. The updater expects both release assets:
+Calendarr can check GitHub Releases for updates from the About page. The updater expects these release assets:
 
 ```text
 calendarr.exe
 calendarr.exe.sha256
+calendarr.exe.sig
 ```
 
-The checksum file must match the exact `calendarr.exe` uploaded to the same release. If the checksum is missing or does not match, the in-app updater will stop before installing.
+The checksum file must match the exact `calendarr.exe` uploaded to the same release, and the signature file must verify against the public key embedded in the app. If the checksum or signature is missing or invalid, the in-app updater will stop before installing.
 
 ## Building from Source
 
@@ -112,7 +119,7 @@ Release build:
 .\build_release.ps1
 ```
 
-The release build script reads the local ignored `release_secret.txt`, injects it only for the build, restores the public-safe placeholder in source, and generates the updater checksum. Create `release_secret.txt` locally with the Google OAuth client secret before building releases. Do not commit that file.
+The release build script reads the local ignored `release_secret.txt`, injects it only for the build, restores the public-safe placeholder in source, and generates the updater checksum and signature. Create `release_secret.txt` locally with the Google OAuth client secret before building releases. Create `release_signing_private_key.txt` once with `.\build_release.ps1 -GenerateSigningKey`, then back it up outside the repo. Do not commit either file.
 
 Installer release build:
 
@@ -120,7 +127,7 @@ Installer release build:
 .\build_release.ps1 -BuildInstaller
 ```
 
-The installer build uses Inno Setup and produces `calendarr-setup-<version>.exe`. It includes the Calendarr icon, branded setup artwork, and an optional desktop shortcut checkbox. Normal in-app updater releases still only need `calendarr.exe` and `calendarr.exe.sha256`.
+The installer build uses Inno Setup and produces `calendarr-setup-<version>.exe`. It includes the Calendarr icon, branded setup artwork, and an optional desktop shortcut checkbox. Normal in-app updater releases need `calendarr.exe`, `calendarr.exe.sha256`, and `calendarr.exe.sig`.
 
 For development builds that do not need embedded OAuth:
 

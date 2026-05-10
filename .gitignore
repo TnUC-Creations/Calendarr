@@ -4,6 +4,7 @@ service_account.json
 ignored_shows_prev.json
 google_oauth_client.json
 release_secret.txt
+release_signing_private_key.txt
 
 # ---- Runtime data ----
 sync.log
@@ -15,6 +16,7 @@ history.json
 # ---- Build output ----
 *.exe
 *.exe.sha256
+*.exe.sig
 
 # ---- Local scripts & build config ----
 *.bat

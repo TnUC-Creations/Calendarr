@@ -82,13 +82,20 @@
                                         Web UI Access
                                         <button type="button" class="help-btn" data-bs-toggle="popover"
                                             data-bs-placement="right" data-bs-title="Web UI Access"
-                                            data-bs-content="Local only limits the web interface to this computer. Local network allows other devices on your network to reach it. A service restart is required after changing this.">
+                                            data-bs-content="Local only limits the web interface to this computer. Local network allows other devices on your network to reach it over plain HTTP unless you use your own HTTPS proxy or VPN. A service restart is required after changing this.">
                                             <i class="bi bi-question-circle"></i></button>
                                     </label>
-                                    <select class="form-select" name="web_bind_address">
+                                    <select class="form-select" name="web_bind_address" id="web-bind-address">
                                         <option value="127.0.0.1" {{if ne .Config.WebBindAddress "0.0.0.0"}}selected{{end}}>Local only</option>
-                                        <option value="0.0.0.0" {{if eq .Config.WebBindAddress "0.0.0.0"}}selected{{end}}>Local network</option>
+                                        <option value="0.0.0.0" {{if eq .Config.WebBindAddress "0.0.0.0"}}selected{{end}} {{if not .Config.WebUIPasswordHash}}disabled{{end}}>Local network{{if not .Config.WebUIPasswordHash}} - set password first{{end}}</option>
                                     </select>
+                                    <div class="form-text">
+                                        Local network mode should be used only on trusted networks, VPN/Tailscale, or behind an HTTPS reverse proxy.
+                                        {{if not .Config.WebUIPasswordHash}}Set a Web UI password before enabling Local network access.{{end}}
+                                    </div>
+                                    <div id="web-bind-restart-warning" class="alert alert-warning py-2 mt-2 d-none" style="font-size:0.84rem;">
+                                        Restart the Calendarr service after saving for this access change to take effect.
+                                    </div>
                                 </div>
                                 <div class="col-md-3 pb-1">
                                     <div class="form-check form-switch mb-2">
@@ -387,6 +394,9 @@
                             <p class="text-muted mb-3" style="font-size:0.87rem;">
                                 Connect your Google account so Calendarr can write events to your calendar.
                             </p>
+                            <div class="alert alert-info py-2 mb-3" style="font-size:0.84rem;">
+                                Start this connection from a browser on the Calendarr server. Google redirects back to localhost after approval.
+                            </div>
                             <a href="/oauth/start" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
                                 <i class="bi bi-google me-1"></i> Connect Google Calendar
                             </a>
@@ -745,6 +755,9 @@ const TEST_FIELDS = {
 };
 const settingsForm = document.getElementById('settings-form');
 const saveStatusEl = document.getElementById('settings-save-status');
+const webBindSelect = document.getElementById('web-bind-address');
+const initialWebBindAddress = '{{.Config.WebBindAddress}}';
+const webUIPasswordSet = {{if .Config.WebUIPasswordHash}}true{{else}}false{{end}};
 let autosaveTimer = null;
 let settingsDirty = false;
 let settingsSaving = false;
@@ -754,6 +767,12 @@ function setSaveStatus(text, kind = 'muted') {
     saveStatusEl.textContent = text;
     saveStatusEl.className = `ms-2 text-${kind}`;
     saveStatusEl.style.fontSize = '0.85rem';
+}
+
+function updateWebBindRestartWarning() {
+    const warning = document.getElementById('web-bind-restart-warning');
+    if (!warning || !webBindSelect) return;
+    warning.classList.toggle('d-none', webBindSelect.value === initialWebBindAddress);
 }
 
 function autosaveSettingsNow() {
@@ -771,7 +790,7 @@ function autosaveSettingsNow() {
         .then(data => {
             if (!data.ok) throw new Error(data.message || 'Save failed');
             settingsDirty = false;
-            setSaveStatus('Saved', 'success');
+            setSaveStatus(data.message || 'Saved', data.restart_required ? 'warning' : 'success');
         })
         .catch(err => {
             setSaveStatus('Save failed', 'danger');
@@ -838,6 +857,10 @@ settingsForm.addEventListener('submit', function(e) {
         if (!val('pushover_app_token')) { setFieldError('pushover_app_token', 'App token is required when Pushover is enabled.'); valid = false; }
         if (!val('pushover_user_key'))  { setFieldError('pushover_user_key',  'User key is required when Pushover is enabled.'); valid = false; }
     }
+    if (!webUIPasswordSet && val('web_bind_address') === '0.0.0.0') {
+        setFieldError('web_bind_address', 'Set a Web UI password before enabling Local network access.');
+        valid = false;
+    }
 
     if (!valid) { e.preventDefault(); return; }
 
@@ -850,6 +873,7 @@ settingsForm.addEventListener('submit', function(e) {
 
 settingsForm.addEventListener('change', function(e) {
     if (e.target.closest('#calendar-targets') || e.target.closest('#tab-security-backup')) return;
+    if (e.target === webBindSelect) updateWebBindRestartWarning();
     scheduleAutosave(0);
 });
 
@@ -867,6 +891,8 @@ settingsForm.addEventListener('focusout', function(e) {
         autosaveSettingsNow();
     }
 });
+
+updateWebBindRestartWarning();
 
 window.addEventListener('beforeunload', function(e) {
     if (!settingsDirty && !settingsSaving) return;

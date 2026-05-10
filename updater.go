@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,17 +22,20 @@ const (
 	updateCheckInterval = 24 * time.Hour
 )
 
+var updatePublicKeyB64 = "1sq4Snj83zIPW78jFZY6ygf5JZlz5TpexZZOvyUa7yE="
+
 // UpdateState holds the result of the most recent update check.
 type UpdateState struct {
-	Available   bool
-	LatestTag   string
-	LatestVer   string
-	DownloadURL string
-	ChecksumURL string
-	ReleaseURL  string
-	Checking    bool
-	LastChecked time.Time
-	Error       string
+	Available    bool
+	LatestTag    string
+	LatestVer    string
+	DownloadURL  string
+	ChecksumURL  string
+	SignatureURL string
+	ReleaseURL   string
+	Checking     bool
+	LastChecked  time.Time
+	Error        string
 }
 
 var (
@@ -165,15 +170,20 @@ func checkForUpdates(mode updateCheckMode) {
 		if strings.EqualFold(asset.Name, "calendarr.exe.sha256") {
 			newState.ChecksumURL = asset.BrowserDownloadURL
 		}
+		if strings.EqualFold(asset.Name, "calendarr.exe.sig") {
+			newState.SignatureURL = asset.BrowserDownloadURL
+		}
 	}
-	if newState.Available && (newState.DownloadURL == "" || newState.ChecksumURL == "") {
+	if newState.Available && (newState.DownloadURL == "" || newState.ChecksumURL == "" || newState.SignatureURL == "") {
 		switch {
-		case newState.DownloadURL == "" && newState.ChecksumURL == "":
-			newState.Error = "Release is missing calendarr.exe and calendarr.exe.sha256. In-app update is blocked until both assets are published."
+		case newState.DownloadURL == "" && newState.ChecksumURL == "" && newState.SignatureURL == "":
+			newState.Error = "Release is missing calendarr.exe, calendarr.exe.sha256, and calendarr.exe.sig. In-app update is blocked until all assets are published."
 		case newState.DownloadURL == "":
 			newState.Error = "Release is missing calendarr.exe. In-app update is blocked until the executable asset is published."
-		default:
+		case newState.ChecksumURL == "":
 			newState.Error = "Release is missing calendarr.exe.sha256. In-app update is blocked until a checksum asset is published."
+		default:
+			newState.Error = "Release is missing calendarr.exe.sig. In-app update is blocked until a signature asset is published."
 		}
 		logEvent("[Updater] Check warning: " + newState.Error)
 	}
@@ -223,7 +233,7 @@ func decideUpdatePushover(cfg Config, state UpdateState, mode updateCheckMode) u
 	if strings.TrimSpace(cfg.PushoverToken) == "" || strings.TrimSpace(cfg.PushoverUser) == "" {
 		return updatePushoverDecision{Reason: "credentials missing"}
 	}
-	if state.DownloadURL == "" || state.ChecksumURL == "" {
+	if state.DownloadURL == "" || state.ChecksumURL == "" || state.SignatureURL == "" {
 		return updatePushoverDecision{Reason: "not installable"}
 	}
 	if state.LatestTag != "" && state.LatestTag == cfg.LastUpdatePushoverTag {
@@ -290,6 +300,10 @@ func downloadUpdate() error {
 		return fmt.Errorf("release is missing calendarr.exe.sha256 — in-app update is blocked for safety")
 	}
 
+	if state.SignatureURL == "" {
+		return fmt.Errorf("release is missing calendarr.exe.sig - in-app update is blocked for safety")
+	}
+
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("cannot determine exe path: %w", err)
@@ -302,6 +316,10 @@ func downloadUpdate() error {
 	logEvent(fmt.Sprintf("[Updater] Starting update: v%s → v%s", appVersion, state.LatestVer))
 	appLog("[Updater] Downloading: %s", state.DownloadURL)
 	expectedSHA, err := downloadExpectedSHA256(state.ChecksumURL)
+	if err != nil {
+		return err
+	}
+	signature, err := downloadSignature(state.SignatureURL)
 	if err != nil {
 		return err
 	}
@@ -330,6 +348,10 @@ func downloadUpdate() error {
 	f.Close()
 	appLog("[Updater] Download complete: %.2f MB", float64(n)/(1024*1024))
 	if err := verifySHA256(updatePath, expectedSHA); err != nil {
+		os.Remove(updatePath)
+		return err
+	}
+	if err := verifyUpdateSignature(updatePath, signature); err != nil {
 		os.Remove(updatePath)
 		return err
 	}
@@ -394,6 +416,31 @@ func downloadUpdate() error {
 	return nil
 }
 
+func downloadSignature(url string) ([]byte, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("signature download failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("signature download returned HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return nil, fmt.Errorf("signature read failed: %w", err)
+	}
+	return parseSignatureAsset(data)
+}
+
+func parseSignatureAsset(data []byte) ([]byte, error) {
+	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+	if err != nil || len(sig) != ed25519.SignatureSize {
+		return nil, fmt.Errorf("signature asset is invalid")
+	}
+	return sig, nil
+}
+
 func downloadExpectedSHA256(url string) (string, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(url)
@@ -435,5 +482,21 @@ func verifySHA256(path, expected string) error {
 		return fmt.Errorf("update checksum mismatch — downloaded file was not installed")
 	}
 	appLog("[Updater] SHA-256 verified: %s", got)
+	return nil
+}
+
+func verifyUpdateSignature(path string, sig []byte) error {
+	pub, err := base64.StdEncoding.DecodeString(updatePublicKeyB64)
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		return fmt.Errorf("update signature verifier is not configured")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("cannot verify update signature: %w", err)
+	}
+	if !ed25519.Verify(ed25519.PublicKey(pub), data, sig) {
+		return fmt.Errorf("update signature could not be verified - downloaded file was not installed")
+	}
+	appLog("[Updater] Signature verified")
 	return nil
 }

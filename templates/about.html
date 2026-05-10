@@ -262,7 +262,7 @@
                                 {{if .Update.Checking}}
                                     <span class="text-muted" style="font-size:0.85rem;"><span class="spinner-border spinner-border-sm me-1"></span>Checking...</span>
                                 {{else if .Update.Error}}
-                                    <span class="text-muted" style="font-size:0.85rem;" title="{{.Update.Error}}">Unable to check</span>
+                                    <span class="text-muted" style="font-size:0.85rem;" title="{{.Update.Error}}">{{if .Update.Available}}Unable to install{{else}}Unable to check{{end}}</span>
                                 {{else if .Update.Available}}
                                     <span class="badge bg-primary px-2">v{{.Update.LatestVer}}</span>
                                     <span class="badge bg-success ms-1">Update available</span>
@@ -284,7 +284,7 @@
                 </table>
             </div>
             <div class="col-md-6 d-flex flex-column gap-2 align-items-start" id="update-actions">
-                {{if .Update.Available}}
+                {{if and .Update.Available (not .Update.Error)}}
                 <div class="d-flex gap-2 flex-wrap">
                     <a href="{{.Update.ReleaseURL}}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-journal-text"></i> Release Notes
@@ -292,6 +292,12 @@
                     <button class="btn btn-sm btn-primary" onclick="applyUpdate(this)">
                         <i class="bi bi-download"></i> Download &amp; Install v{{.Update.LatestVer}}
                     </button>
+                </div>
+                {{else if and .Update.Available .Update.ReleaseURL}}
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{.Update.ReleaseURL}}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-journal-text"></i> Release Notes
+                    </a>
                 </div>
                 {{end}}
                 <button class="btn btn-sm btn-outline-secondary" onclick="checkNow(this)">
@@ -306,6 +312,24 @@
 <div class="card mt-4">
     <div class="card-header"><i class="bi bi-card-list"></i> Changelog</div>
     <div class="card-body p-0">
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.10.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Sign in now slows repeated wrong passwords so the Web UI is harder to guess from the network.</li>
+                <li>Changing or removing the Web UI password now signs out older browser sessions.</li>
+                <li>In-app updates now require a release signature before installing.</li>
+                <li>Connection test buttons now reject broken or oversized requests with clearer messages.</li>
+                <li>Backup restore avoids applying ignored shows before settings are saved.</li>
+                <li>Local network access now has clearer warnings about trusted networks and HTTPS proxies.</li>
+                <li>Settings now tells you to set a Web UI password before choosing Local network access.</li>
+                <li>Settings now tells you when a Web UI access or port change needs a service restart.</li>
+                <li>Google Calendar connection now explains that the approval step must be started from the Calendarr server.</li>
+                <li>Google Calendar approval now uses the port the service is actually running on, even if a new port was saved before restart.</li>
+            </ul>
+        </div>
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.9.0</span>
@@ -355,9 +379,15 @@
                 <li>History entries are no longer lost if a sync and a clear happen close together.</li>
             </ul>
         </div>
+        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
+                <i class="bi bi-chevron-down me-1"></i>Show older versions
+            </button>
+        </div>
+        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="badge bg-primary px-2">v1.6.0</span>
+                <span class="badge bg-secondary px-2">v1.6.0</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
             <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
@@ -367,12 +397,6 @@
                 <li>Restore now checks the ignored shows file is a valid list before applying it, and shows a clear error if the save fails.</li>
             </ul>
         </div>
-        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
-            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
-                <i class="bi bi-chevron-down me-1"></i>Show older versions
-            </button>
-        </div>
-        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-secondary px-2">v1.5.9</span>
@@ -915,7 +939,7 @@ function updateUI(d) {
     const actionsEl = document.getElementById('update-actions');
     if (!latestEl) return;
 
-    if (d.available) {
+    if (d.available && !d.error) {
         latestEl.innerHTML =
             '<span class="badge bg-primary px-2">v' + d.latest_ver + '</span> ' +
             '<span class="badge bg-success ms-1">Update available</span>';
@@ -925,12 +949,17 @@ function updateUI(d) {
             '<button class="btn btn-sm btn-primary" onclick="applyUpdate(this)"><i class="bi bi-download"></i> Download &amp; Install v' + d.latest_ver + '</button>' +
             '</div>' +
             '<button class="btn btn-sm btn-outline-secondary" onclick="checkNow(this)"><i class="bi bi-arrow-clockwise"></i> Check Now</button>';
+    } else if (d.error) {
+        latestEl.innerHTML = '<span class="text-muted" style="font-size:0.85rem;" title="' + d.error + '">Unable to install</span>';
+        actionsEl.innerHTML =
+            '<div class="d-flex gap-2 flex-wrap">' +
+            (d.release_url ? '<a href="' + d.release_url + '" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-journal-text"></i> Release Notes</a>' : '') +
+            '</div>' +
+            '<button class="btn btn-sm btn-outline-secondary" onclick="checkNow(this)"><i class="bi bi-arrow-clockwise"></i> Check Now</button>';
     } else if (d.latest_ver) {
         latestEl.innerHTML =
             '<span class="badge bg-secondary px-2">v' + d.latest_ver + '</span> ' +
             '<span class="text-muted ms-1" style="font-size:0.82rem;">Up to date</span>';
-    } else if (d.error) {
-        latestEl.innerHTML = '<span class="text-muted" style="font-size:0.85rem;" title="' + d.error + '">Unable to check</span>';
     }
     if (lastEl && d.last_checked) lastEl.textContent = d.last_checked;
 }

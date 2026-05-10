@@ -37,6 +37,50 @@ func TestSettingsTemplateRendersPushoverUpdateCheckbox(t *testing.T) {
 	}
 }
 
+func TestSettingsTemplateDisablesLANAccessWithoutPassword(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := SettingsData{
+		PageBase: PageBase{
+			CSRFToken:   "test-token",
+			CurrentPage: "settings",
+		},
+		Config: Config{WebBindAddress: "127.0.0.1"},
+	}
+	if err := pageTemplates["settings"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if !strings.Contains(html, `value="0.0.0.0"  disabled`) {
+		t.Fatal("Local network option should be disabled when no Web UI password is set")
+	}
+	if !strings.Contains(html, `Set a Web UI password before enabling Local network access.`) {
+		t.Fatal("settings template should explain that a password is required before Local network access")
+	}
+	if !strings.Contains(html, `Restart the Calendarr service after saving`) {
+		t.Fatal("settings template should show restart warning copy for Web UI access changes")
+	}
+}
+
+func TestSettingsTemplateAllowsLANAccessWithPassword(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := SettingsData{
+		PageBase: PageBase{
+			CSRFToken:   "test-token",
+			CurrentPage: "settings",
+		},
+		Config: Config{WebBindAddress: "127.0.0.1", WebUIPasswordHash: "hash"},
+	}
+	if err := pageTemplates["settings"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if strings.Contains(html, `Local network - set password first`) {
+		t.Fatal("Local network option should not show password-required suffix when a password is set")
+	}
+}
+
 func TestAboutChangelogShowsFiveRecentVersions(t *testing.T) {
 	data, err := os.ReadFile("templates/about.html")
 	if err != nil {
@@ -88,6 +132,7 @@ func TestSettingsTemplateRendersAllFiveTabs(t *testing.T) {
 		`name="movie_theater_template"`,
 		`id="restore-form"`,
 		`id="webui-set-password-btn"`,
+		`Start this connection from a browser on the Calendarr server.`,
 	}
 	for _, want := range musts {
 		if !strings.Contains(html, want) {

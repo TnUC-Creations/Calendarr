@@ -87,6 +87,15 @@
             color: var(--text-muted);
         }
         .alert { font-size: 0.88rem; }
+        .security-note {
+            border: 1px solid rgba(255,193,7,0.35);
+            background: rgba(255,193,7,0.08);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 0.82rem;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -104,6 +113,9 @@
         <p class="text-muted mb-3" style="font-size:0.85rem;">
             LAN access is enabled but no Web UI password is set. Set one now to protect this interface.
         </p>
+        <div class="security-note">
+            Local network access uses plain HTTP unless you put Calendarr behind your own HTTPS proxy or VPN. Only use it on networks you trust.
+        </div>
         <form method="post" action="/login">
             <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
             <div class="mb-3">
@@ -119,6 +131,9 @@
             <button type="submit" class="btn btn-primary">Set Password &amp; Sign in</button>
         </form>
         {{else}}
+        <div class="security-note">
+            If you use Local network access, sign in only from a trusted network, VPN, or HTTPS reverse proxy.
+        </div>
         <form method="post" action="/login">
             <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
             <div class="mb-3">

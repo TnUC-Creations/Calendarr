@@ -311,12 +311,16 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var bindBlocked bool
+		var restartRequired bool
 		err := mutateConfig(func(c *Config) error {
+			oldBind := c.WebBindAddress
+			oldPort := c.WebPort
 			applySettingsForm(c, r)
 			if c.WebBindAddress == "0.0.0.0" && c.WebUIPasswordHash == "" {
 				bindBlocked = true
 				return fmt.Errorf("Set a Web UI password before enabling Local network access.")
 			}
+			restartRequired = oldBind != c.WebBindAddress || oldPort != c.WebPort
 			return nil
 		})
 		if err != nil {
@@ -329,7 +333,11 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		logEvent("[UI] Settings saved")
-		setFlash(w, "success", "Settings saved!")
+		if restartRequired {
+			setFlash(w, "warning", "Settings saved. Restart the Calendarr service for Web UI access or port changes to take effect.")
+		} else {
+			setFlash(w, "success", "Settings saved!")
+		}
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
 	}
@@ -665,6 +673,7 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var safeIgnored []byte
 	if ignoredBytes != nil {
 		var arr []string
 		if err := json.Unmarshal(ignoredBytes, &arr); err != nil {
@@ -678,17 +687,21 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/settings", http.StatusSeeOther)
 			return
 		}
-		if err := os.WriteFile(dataPath(cfg.IgnoredShowsFile), safe, 0644); err != nil {
-			setFlash(w, "danger", "Could not write ignored shows from backup: "+err.Error())
-			http.Redirect(w, r, "/settings", http.StatusSeeOther)
-			return
-		}
+		safeIgnored = safe
 	}
 
 	if err := saveConfig(cfg); err != nil {
 		setFlash(w, "danger", "Could not save restored config: "+err.Error())
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
+	}
+	if safeIgnored != nil {
+		if err := os.WriteFile(dataPath(cfg.IgnoredShowsFile), safeIgnored, 0644); err != nil {
+			logEvent("[UI] Settings restored but ignored shows restore failed: " + err.Error())
+			setFlash(w, "warning", "Settings restored, but ignored shows could not be restored: "+err.Error())
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
 	}
 
 	logEvent("[UI] Settings restored from backup")
@@ -777,17 +790,30 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		logEvent("[Auth] Web UI password set")
+		clearSessions()
 		createSession(w)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
+	if wait := authThrottleDelay(r.RemoteAddr); wait > 0 {
+		appLog("[Auth] Login throttled from %s", r.RemoteAddr)
+		renderLogin(w, false, fmt.Sprintf("Too many failed attempts. Try again in %s.", wait))
+		return
+	}
+
 	pass := r.FormValue("password")
 	if !checkPassword(cfg.WebUIPasswordHash, pass) {
+		wait := recordLoginFailure(r.RemoteAddr)
 		appLog("[Auth] Failed login from %s", r.RemoteAddr)
+		if wait > 0 {
+			renderLogin(w, false, fmt.Sprintf("Too many failed attempts. Try again in %s.", wait))
+			return
+		}
 		renderLogin(w, false, "Incorrect password.")
 		return
 	}
+	recordLoginSuccess(r.RemoteAddr)
 	createSession(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

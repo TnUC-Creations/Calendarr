@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -28,6 +29,12 @@ const (
 	bcryptCost        = 12
 	minPasswordLen    = 8
 	maxPasswordLen    = 72 // bcrypt hard limit
+
+	authAttemptWindow    = 15 * time.Minute
+	authLockoutThreshold = 5
+	authLockoutDuration  = 2 * time.Minute
+	authGlobalThreshold  = 25
+	authGlobalBackoff    = 30 * time.Second
 )
 
 // sessionStore holds active session IDs. Sessions are kept in memory only; a
@@ -35,7 +42,17 @@ const (
 var (
 	sessionStore   = map[string]time.Time{} // sessionID -> expiresAt
 	sessionStoreMu sync.Mutex
+
+	authAttemptMu      sync.Mutex
+	authAttemptsByIP   = map[string]authAttemptState{}
+	authGlobalFailures []time.Time
 )
+
+type authAttemptState struct {
+	Failures     int
+	FirstFailure time.Time
+	LockedUntil  time.Time
+}
 
 // hashPassword returns a bcrypt hash for the given plain-text password.
 func hashPassword(plain string) (string, error) {
@@ -99,6 +116,14 @@ func destroySession(r *http.Request, w http.ResponseWriter) {
 	})
 }
 
+// clearSessions revokes every active browser session. Use after password
+// changes so old browsers cannot keep using the previous access grant.
+func clearSessions() {
+	sessionStoreMu.Lock()
+	sessionStore = map[string]time.Time{}
+	sessionStoreMu.Unlock()
+}
+
 // sessionValid reports whether the request carries a non-expired session.
 func sessionValid(r *http.Request) bool {
 	c, err := r.Cookie(sessionCookieName)
@@ -132,7 +157,93 @@ func sessionSweeper() {
 			}
 		}
 		sessionStoreMu.Unlock()
+		pruneAuthAttempts(time.Now())
 	}
+}
+
+func clientIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil && host != "" {
+		return host
+	}
+	return strings.TrimSpace(remoteAddr)
+}
+
+func authThrottleDelay(remoteAddr string) time.Duration {
+	now := time.Now()
+	ip := clientIP(remoteAddr)
+
+	authAttemptMu.Lock()
+	defer authAttemptMu.Unlock()
+	pruneAuthAttemptsLocked(now)
+
+	if len(authGlobalFailures) >= authGlobalThreshold {
+		return authGlobalBackoff
+	}
+	if st, ok := authAttemptsByIP[ip]; ok && now.Before(st.LockedUntil) {
+		return time.Until(st.LockedUntil).Round(time.Second)
+	}
+	return 0
+}
+
+func recordLoginFailure(remoteAddr string) time.Duration {
+	now := time.Now()
+	ip := clientIP(remoteAddr)
+
+	authAttemptMu.Lock()
+	defer authAttemptMu.Unlock()
+	pruneAuthAttemptsLocked(now)
+
+	st := authAttemptsByIP[ip]
+	if st.FirstFailure.IsZero() || now.Sub(st.FirstFailure) > authAttemptWindow {
+		st = authAttemptState{FirstFailure: now}
+	}
+	st.Failures++
+	if st.Failures >= authLockoutThreshold {
+		extra := st.Failures - authLockoutThreshold
+		if extra > 4 {
+			extra = 4
+		}
+		st.LockedUntil = now.Add(authLockoutDuration + time.Duration(extra)*authLockoutDuration)
+	}
+	authAttemptsByIP[ip] = st
+	authGlobalFailures = append(authGlobalFailures, now)
+
+	if now.Before(st.LockedUntil) {
+		return time.Until(st.LockedUntil).Round(time.Second)
+	}
+	return 0
+}
+
+func recordLoginSuccess(remoteAddr string) {
+	ip := clientIP(remoteAddr)
+	authAttemptMu.Lock()
+	delete(authAttemptsByIP, ip)
+	authAttemptMu.Unlock()
+}
+
+func pruneAuthAttempts(now time.Time) {
+	authAttemptMu.Lock()
+	defer authAttemptMu.Unlock()
+	pruneAuthAttemptsLocked(now)
+}
+
+func pruneAuthAttemptsLocked(now time.Time) {
+	cutoff := now.Add(-authAttemptWindow)
+	for ip, st := range authAttemptsByIP {
+		if st.LockedUntil.IsZero() || now.After(st.LockedUntil) {
+			if st.FirstFailure.IsZero() || st.FirstFailure.Before(cutoff) {
+				delete(authAttemptsByIP, ip)
+			}
+		}
+	}
+	kept := authGlobalFailures[:0]
+	for _, ts := range authGlobalFailures {
+		if ts.After(cutoff) {
+			kept = append(kept, ts)
+		}
+	}
+	authGlobalFailures = kept
 }
 
 // authAllowlistedPath returns true for routes that bypass auth entirely.
