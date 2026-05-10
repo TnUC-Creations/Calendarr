@@ -81,6 +81,54 @@ func TestSettingsTemplateAllowsLANAccessWithPassword(t *testing.T) {
 	}
 }
 
+func TestLayoutGoogleCalendarBannerLinksToCalendarTab(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := DashboardData{
+		PageBase: PageBase{
+			CSRFToken:         "test-token",
+			CurrentPage:       "dashboard",
+			CalendarConnected: false,
+		},
+		Config: Config{},
+	}
+	if err := pageTemplates["dashboard"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if !strings.Contains(html, `href="/settings#calendar"`) {
+		t.Fatal("Google Calendar banner should link to /settings#calendar")
+	}
+	if strings.Contains(html, `href="/settings#google-calendar-card"`) {
+		t.Fatal("Google Calendar banner should not link to the old card anchor")
+	}
+}
+
+func TestSettingsTemplateSupportsCalendarHashTab(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := SettingsData{
+		PageBase: PageBase{
+			CSRFToken:   "test-token",
+			CurrentPage: "settings",
+		},
+		Config: Config{},
+	}
+	if err := pageTemplates["settings"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		`'#calendar':        '#tab-calendar'`,
+		`bootstrap.Tab.getOrCreateInstance(btn).show()`,
+		`window.location.hash = 'calendar'`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("settings template missing hash-tab support %q", want)
+		}
+	}
+}
+
 func TestAboutChangelogShowsFiveRecentVersions(t *testing.T) {
 	data, err := os.ReadFile("templates/about.html")
 	if err != nil {
@@ -175,11 +223,12 @@ func TestSettingsTemplateRendersAllFiveTabs(t *testing.T) {
 func TestDashboardCalendarTargetsRenderAsJavascriptStrings(t *testing.T) {
 	loadTemplates()
 	var out bytes.Buffer
-	data := map[string]interface{}{
-		"CSRFToken":      "test-token",
-		"CurrentPage":    "dashboard",
-		"LastRunChanges": []string{},
-		"Config": Config{CalendarTargets: []CalendarTarget{
+	data := DashboardData{
+		PageBase: PageBase{
+			CSRFToken:   "test-token",
+			CurrentPage: "dashboard",
+		},
+		Config: Config{CalendarTargets: []CalendarTarget{
 			{ID: "movies@example.com", Name: "Movies"},
 		}},
 	}
@@ -189,5 +238,74 @@ func TestDashboardCalendarTargetsRenderAsJavascriptStrings(t *testing.T) {
 	html := out.String()
 	if !strings.Contains(html, `id: "movies@example.com"`) {
 		t.Fatalf("calendar ID was not rendered as a JavaScript string: %s", html)
+	}
+}
+
+func TestDashboardServiceBadgesRenderExternalLinksForValidURLs(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	cfg := Config{
+		UseRadarr: true,
+		RadarrURL: "http://radarr.local:7878/api/v3",
+		UseSonarr: true,
+		SonarrURL: "https://media.example.com/sonarr/api/v3",
+	}
+	data := DashboardData{
+		PageBase:     PageBase{CSRFToken: "test-token", CurrentPage: "dashboard"},
+		Config:       cfg,
+		RadarrAppURL: serviceAppURL(cfg.RadarrURL),
+		SonarrAppURL: serviceAppURL(cfg.SonarrURL),
+	}
+	if err := pageTemplates["dashboard"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		`href="http://radarr.local:7878/" target="_blank" rel="noopener"`,
+		`href="https://media.example.com/sonarr/" target="_blank" rel="noopener"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("dashboard missing service app link %q", want)
+		}
+	}
+}
+
+func TestDashboardServiceBadgesStayNonClickableForInvalidURLs(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	cfg := Config{
+		UseRadarr: true,
+		RadarrURL: "javascript:alert(1)",
+	}
+	data := DashboardData{
+		PageBase:     PageBase{CSRFToken: "test-token", CurrentPage: "dashboard"},
+		Config:       cfg,
+		RadarrAppURL: serviceAppURL(cfg.RadarrURL),
+	}
+	if err := pageTemplates["dashboard"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if strings.Contains(html, `href="javascript:alert`) {
+		t.Fatal("dashboard rendered an unsafe Radarr link")
+	}
+	if !strings.Contains(html, `<span class="badge bg-warning text-dark">Radarr</span>`) {
+		t.Fatal("dashboard should render invalid Radarr URLs as a non-clickable badge")
+	}
+}
+
+func TestServiceAppURLStripsAPIPath(t *testing.T) {
+	tests := map[string]string{
+		"http://localhost:7878/api/v3":            "http://localhost:7878/",
+		"https://media.example.com/sonarr/api/v3": "https://media.example.com/sonarr/",
+		"http://localhost:8989/":                  "http://localhost:8989/",
+		"javascript:alert(1)":                     "",
+		"http://":                                 "",
+		"not a url":                               "",
+	}
+	for raw, want := range tests {
+		if got := serviceAppURL(raw); got != want {
+			t.Fatalf("serviceAppURL(%q) = %q, want %q", raw, got, want)
+		}
 	}
 }

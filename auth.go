@@ -201,6 +201,60 @@ func callbackBaseURL() string {
 	return fmt.Sprintf("http://localhost:%d", port)
 }
 
+const oauthSuccessPageHTML = `<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Calendar Connected</title>
+    <style>
+        body { margin:0; min-height:100vh; display:grid; place-items:center; background:#141920; color:#c9d1d9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+        main { width:min(420px, calc(100% - 2rem)); padding:1.5rem; text-align:center; }
+        h1 { margin:0 0 0.6rem; font-size:1.35rem; }
+        p { margin:0.5rem 0; color:#8b949e; line-height:1.45; }
+        a { display:inline-block; margin-top:0.8rem; color:#fff; background:#e84393; border-radius:6px; padding:0.55rem 0.85rem; text-decoration:none; font-weight:600; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Google Calendar connected</h1>
+    <p>Returning to Calendarr...</p>
+    <p id="fallback" hidden>This tab can be closed. You can also return to Calendar settings.</p>
+    <a id="settings-link" href="/settings#calendar" hidden>Open Calendar Settings</a>
+</main>
+<script>
+(function () {
+    const target = '/settings#calendar';
+    function showFallback() {
+        const fallback = document.getElementById('fallback');
+        const link = document.getElementById('settings-link');
+        if (fallback) fallback.hidden = false;
+        if (link) link.hidden = false;
+    }
+    try {
+        localStorage.setItem('calendarr-oauth-complete', String(Date.now()));
+    } catch (e) {}
+    try {
+        if (window.opener && !window.opener.closed) {
+            window.opener.location.href = target;
+            window.opener.focus();
+        }
+    } catch (e) {}
+    window.setTimeout(function () {
+        window.close();
+    }, 250);
+    window.setTimeout(showFallback, 900);
+})();
+</script>
+</body>
+</html>`
+
+func renderOAuthSuccessPage(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(oauthSuccessPageHTML))
+}
+
 // handleOAuthCallback receives the redirect from Google after the user
 // authorizes, exchanges the code for tokens, and saves the refresh token.
 func handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
@@ -246,5 +300,5 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setFlash(w, "success", "Google Calendar connected successfully!")
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	renderOAuthSuccessPage(w)
 }

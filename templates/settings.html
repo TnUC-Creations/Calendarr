@@ -90,11 +90,15 @@
                                         <option value="0.0.0.0" {{if eq .Config.WebBindAddress "0.0.0.0"}}selected{{end}} {{if not .Config.WebUIPasswordHash}}disabled{{end}}>Local network{{if not .Config.WebUIPasswordHash}} - set password first{{end}}</option>
                                     </select>
                                     <div class="form-text">
-                                        Local network mode should be used only on trusted networks, VPN/Tailscale, or behind an HTTPS reverse proxy.
-                                        {{if not .Config.WebUIPasswordHash}}Set a Web UI password before enabling Local network access.{{end}}
+                                        Local network mode should be used only on trusted networks, VPN/Tailscale, or behind HTTPS.
                                     </div>
-                                    <div id="web-bind-restart-warning" class="alert alert-warning py-2 mt-2 d-none" style="font-size:0.84rem;">
-                                        Restart the Calendarr service after saving for this access change to take effect.
+                                    {{if not .Config.WebUIPasswordHash}}
+                                    <div class="form-text text-warning">
+                                        <i class="bi bi-lock-fill me-1"></i>Set a Web UI password before enabling Local network access.
+                                    </div>
+                                    {{end}}
+                                    <div id="web-bind-restart-warning" class="form-text text-warning mt-1 d-none">
+                                        <i class="bi bi-arrow-clockwise me-1"></i>Restart the Calendarr service after saving for this access change to take effect.
                                     </div>
                                 </div>
                                 <div class="col-md-3 pb-1">
@@ -397,7 +401,7 @@
                             <div class="alert alert-info py-2 mb-3" style="font-size:0.84rem;">
                                 Start this connection from a browser on the Calendarr server. Google redirects back to localhost after approval.
                             </div>
-                            <a href="/oauth/start" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
+                            <a href="/oauth/start" onclick="openOAuthWindow(event)" class="btn btn-sm btn-primary">
                                 <i class="bi bi-google me-1"></i> Connect Google Calendar
                             </a>
                             {{end}}
@@ -739,6 +743,26 @@ document.querySelectorAll('#settings-tabs button[data-bs-toggle="tab"]').forEach
         if (slug) history.replaceState(null, '', '#' + slug);
     });
 });
+
+window.addEventListener('storage', e => {
+    if (e.key !== 'calendarr-oauth-complete') return;
+    if (window.location.pathname === '/settings') {
+        window.location.hash = 'calendar';
+        window.location.reload();
+    } else {
+        window.location.href = '/settings#calendar';
+    }
+});
+
+function openOAuthWindow(event) {
+    event.preventDefault();
+    const popup = window.open('/oauth/start', 'calendarr-oauth', 'width=640,height=760');
+    if (popup) {
+        popup.focus();
+    } else {
+        window.location.href = '/oauth/start';
+    }
+}
 
 function toggleSecret(btn) {
     const input = btn.closest('.input-group').querySelector('input');

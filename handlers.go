@@ -133,6 +133,8 @@ type DashboardData struct {
 	Deleted        int
 	SyncProgress   string
 	Config         Config
+	RadarrAppURL   string
+	SonarrAppURL   string
 	TheaterSuffix  string
 	DigitalSuffix  string
 }
@@ -236,6 +238,33 @@ func depVersion(path string) string {
 	return "unknown"
 }
 
+func serviceAppURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return ""
+	}
+
+	parts := strings.Split(u.Path, "/")
+	for i, part := range parts {
+		if strings.EqualFold(part, "api") {
+			u.Path = strings.Join(parts[:i], "/")
+			break
+		}
+	}
+	if u.Path == "" {
+		u.Path = "/"
+	} else if !strings.HasSuffix(u.Path, "/") {
+		u.Path += "/"
+	}
+	u.RawPath = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
+}
+
 // ---- Log file helpers -------------------------------------------------------
 
 // listLogFiles returns all daily log files in logsDir, newest first.
@@ -281,6 +310,8 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Deleted:        s.LastRunStats.Deleted,
 		SyncProgress:   s.SyncProgress,
 		Config:         cfg,
+		RadarrAppURL:   serviceAppURL(cfg.RadarrURL),
+		SonarrAppURL:   serviceAppURL(cfg.SonarrURL),
 		TheaterSuffix:  templateSuffix(cfg.MovieTheaterTemplate),
 		DigitalSuffix:  templateSuffix(cfg.MovieDigitalTemplate),
 	}

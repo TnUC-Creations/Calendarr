@@ -77,8 +77,20 @@
                 <p class="text-muted mb-0" style="font-size:0.85rem;">
                     <i class="bi bi-clock"></i> Every {{.Config.RunIntervalHours}} hour(s)
                     &nbsp;|&nbsp;
-                    {{if .Config.UseRadarr}}<span class="badge bg-warning text-dark">Radarr</span>{{end}}
-                    {{if .Config.UseSonarr}}<span class="badge bg-primary">Sonarr</span>{{end}}
+                    {{if .Config.UseRadarr}}
+                        {{if .RadarrAppURL}}
+                        <a href="{{.RadarrAppURL}}" target="_blank" rel="noopener" class="badge bg-warning text-dark text-decoration-none">Radarr</a>
+                        {{else}}
+                        <span class="badge bg-warning text-dark">Radarr</span>
+                        {{end}}
+                    {{end}}
+                    {{if .Config.UseSonarr}}
+                        {{if .SonarrAppURL}}
+                        <a href="{{.SonarrAppURL}}" target="_blank" rel="noopener" class="badge bg-primary text-decoration-none">Sonarr</a>
+                        {{else}}
+                        <span class="badge bg-primary">Sonarr</span>
+                        {{end}}
+                    {{end}}
                 </p>
             </div>
         </div>

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -65,5 +67,30 @@ func TestCallbackBaseURLFallsBackToSavedPortWhenNoActivePort(t *testing.T) {
 	}
 	if got := filepath.Base(dataPath(configFile)); got != configFile {
 		t.Fatalf("dataPath sanity check = %q, want %q", got, configFile)
+	}
+}
+
+func TestOAuthSuccessPageRefreshesOpenerAndProvidesFallback(t *testing.T) {
+	rr := httptest.NewRecorder()
+	renderOAuthSuccessPage(rr)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("content type = %q, want text/html; charset=utf-8", got)
+	}
+	html := rr.Body.String()
+	for _, want := range []string{
+		`window.opener.location.href = target`,
+		`window.opener.focus()`,
+		`window.close()`,
+		`localStorage.setItem('calendarr-oauth-complete'`,
+		`href="/settings#calendar"`,
+		`Google Calendar connected`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("OAuth success page missing %q", want)
+		}
 	}
 }
