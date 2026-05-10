@@ -9,623 +9,725 @@
         </button>
         <span id="settings-save-status" class="text-muted ms-2" style="font-size:0.85rem;">Saved</span>
     </div>
-    <div class="row g-3">
 
-        <!-- General -->
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header"><i class="bi bi-sliders"></i> General</div>
-                <div class="card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label class="form-label">
-                                Run Interval (hours)
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Run Interval"
-                                    data-bs-content="How often the app syncs with Radarr and Sonarr. A value of 6 means once every 6 hours. Minimum is 0.5 (every 30 minutes).">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <input type="number" class="form-control" name="run_interval_hours"
-                                   value="{{.Config.RunIntervalHours}}" min="0.5" step="0.5">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">
-                                Web UI Port
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Web UI Port"
-                                    data-bs-content="The port for accessing this interface. Default is 5000. A service restart is required after changing this.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <input type="number" class="form-control" name="web_port"
-                                   value="{{.Config.WebPort}}" min="1024" max="65535">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">
-                                Web UI Access
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Web UI Access"
-                                    data-bs-content="Local only limits the web interface to this computer. Local network allows other devices on your network to reach it. A service restart is required after changing this.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <select class="form-select" name="web_bind_address">
-                                <option value="127.0.0.1" {{if ne .Config.WebBindAddress "0.0.0.0"}}selected{{end}}>Local only</option>
-                                <option value="0.0.0.0" {{if eq .Config.WebBindAddress "0.0.0.0"}}selected{{end}}>Local network</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3 pb-1">
-                            <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" role="switch"
-                                       name="sync_on_start" id="sync_on_start"
-                                       {{if .Config.SyncOnStart}}checked{{end}}>
-                                <label class="form-check-label" for="sync_on_start">
-                                    <strong>Sync on Start</strong>
-                                    <button type="button" class="help-btn" data-bs-toggle="popover"
-                                        data-bs-placement="right" data-bs-title="Sync on Start"
-                                        data-bs-content="When enabled, a sync runs automatically each time the service starts or restarts.">
-                                        <i class="bi bi-question-circle"></i></button>
-                                </label>
-                            </div>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" role="switch"
-                                       name="auto_cleanup_past" id="auto_cleanup_past"
-                                       {{if .Config.AutoCleanupPast}}checked{{end}}>
-                                <label class="form-check-label" for="auto_cleanup_past">
-                                    <strong>Auto-Cleanup Past</strong>
-                                    <button type="button" class="help-btn" data-bs-toggle="popover"
-                                        data-bs-placement="right" data-bs-title="Auto-Cleanup Past Events"
-                                        data-bs-content="When enabled, past Calendarr events are automatically removed from Google Calendar at the end of each successful sync. Only events matching Calendarr naming patterns are removed — personal events are never affected.">
-                                        <i class="bi bi-question-circle"></i></button>
-                                </label>
+    <ul class="nav nav-tabs mb-0" id="settings-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-general-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-general" type="button" role="tab" aria-controls="tab-general" aria-selected="true">
+                <i class="bi bi-sliders me-1"></i>General
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-media-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-media" type="button" role="tab" aria-controls="tab-media" aria-selected="false">
+                <i class="bi bi-collection-play me-1"></i>Media Sources
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-calendar-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-calendar" type="button" role="tab" aria-controls="tab-calendar" aria-selected="false">
+                <i class="bi bi-calendar3 me-1"></i>Calendar
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-notifications-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-notifications" type="button" role="tab" aria-controls="tab-notifications" aria-selected="false">
+                <i class="bi bi-bell-fill me-1"></i>Notifications
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-security-backup-btn" data-bs-toggle="tab"
+                data-bs-target="#tab-security-backup" type="button" role="tab" aria-controls="tab-security-backup" aria-selected="false">
+                <i class="bi bi-shield-lock me-1"></i>Security &amp; Backup
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content pt-3">
+
+        <!-- ====================== General tab ====================== -->
+        <div class="tab-pane fade show active" id="tab-general" role="tabpanel" aria-labelledby="tab-general-btn">
+            <div class="row g-3">
+
+                <!-- General -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header"><i class="bi bi-sliders"></i> General</div>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        Run Interval (hours)
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Run Interval"
+                                            data-bs-content="How often the app syncs with Radarr and Sonarr. A value of 6 means once every 6 hours. Minimum is 0.5 (every 30 minutes).">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="number" class="form-control" name="run_interval_hours"
+                                           value="{{.Config.RunIntervalHours}}" min="0.5" step="0.5">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        Web UI Port
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Web UI Port"
+                                            data-bs-content="The port for accessing this interface. Default is 5000. A service restart is required after changing this.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="number" class="form-control" name="web_port"
+                                           value="{{.Config.WebPort}}" min="1024" max="65535">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        Web UI Access
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Web UI Access"
+                                            data-bs-content="Local only limits the web interface to this computer. Local network allows other devices on your network to reach it. A service restart is required after changing this.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <select class="form-select" name="web_bind_address">
+                                        <option value="127.0.0.1" {{if ne .Config.WebBindAddress "0.0.0.0"}}selected{{end}}>Local only</option>
+                                        <option value="0.0.0.0" {{if eq .Config.WebBindAddress "0.0.0.0"}}selected{{end}}>Local network</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 pb-1">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               name="sync_on_start" id="sync_on_start"
+                                               {{if .Config.SyncOnStart}}checked{{end}}>
+                                        <label class="form-check-label" for="sync_on_start">
+                                            <strong>Sync on Start</strong>
+                                            <button type="button" class="help-btn" data-bs-toggle="popover"
+                                                data-bs-placement="right" data-bs-title="Sync on Start"
+                                                data-bs-content="When enabled, a sync runs automatically each time the service starts or restarts.">
+                                                <i class="bi bi-question-circle"></i></button>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               name="auto_cleanup_past" id="auto_cleanup_past"
+                                               {{if .Config.AutoCleanupPast}}checked{{end}}>
+                                        <label class="form-check-label" for="auto_cleanup_past">
+                                            <strong>Auto-Cleanup Past</strong>
+                                            <button type="button" class="help-btn" data-bs-toggle="popover"
+                                                data-bs-placement="right" data-bs-title="Auto-Cleanup Past Events"
+                                                data-bs-content="When enabled, past Calendarr events are automatically removed from Google Calendar at the end of each successful sync. Only events matching Calendarr naming patterns are removed — personal events are never affected.">
+                                                <i class="bi bi-question-circle"></i></button>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Data Retention -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header"><i class="bi bi-archive"></i> Data Retention</div>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        Max Log Files
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Max Log Files"
+                                            data-bs-content="How many daily log files to keep in the logs/ folder. Oldest files are pruned automatically after each sync. Default is 30 (about one month).">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="number" class="form-control" name="max_log_files"
+                                           value="{{.Config.MaxLogFiles}}" min="1" max="365">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        Max History Entries
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Max History Entries"
+                                            data-bs-content="Maximum number of entries kept in the history log. Oldest entries are removed as new ones are added. Default is 2000.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="number" class="form-control" name="max_history_entries"
+                                           value="{{.Config.MaxHistoryEntries}}" min="100" max="50000">
+                                </div>
+                                <div class="col-md-6 d-flex align-items-end pb-1">
+                                    <p class="text-muted mb-0" style="font-size:0.83rem;">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Logs are stored as daily files in the <code>logs/</code> folder.
+                                        Oldest files and history entries are pruned automatically when their limits are exceeded.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
-        <!-- Data Retention -->
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header"><i class="bi bi-archive"></i> Data Retention</div>
-                <div class="card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label class="form-label">
-                                Max Log Files
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Max Log Files"
-                                    data-bs-content="How many daily log files to keep in the logs/ folder. Oldest files are pruned automatically after each sync. Default is 30 (about one month).">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <input type="number" class="form-control" name="max_log_files"
-                                   value="{{.Config.MaxLogFiles}}" min="1" max="365">
+        <!-- ====================== Media Sources tab ====================== -->
+        <div class="tab-pane fade" id="tab-media" role="tabpanel" aria-labelledby="tab-media-btn">
+            <div class="row g-3">
+
+                <!-- Radarr -->
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                            <span><i class="bi bi-film"></i> Radarr</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="radarr-result" class="badge d-none"></span>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('radarr',this)">
+                                    <i class="bi bi-activity"></i> Test</button>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           name="use_radarr" id="use_radarr" {{if .Config.UseRadarr}}checked{{end}}>
+                                    <label class="form-check-label" for="use_radarr">Enabled</label>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">
-                                Max History Entries
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Max History Entries"
-                                    data-bs-content="Maximum number of entries kept in the history log. Oldest entries are removed as new ones are added. Default is 2000.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <input type="number" class="form-control" name="max_history_entries"
-                                   value="{{.Config.MaxHistoryEntries}}" min="100" max="50000">
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">URL
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Radarr URL"
+                                        data-bs-content="The full URL to your Radarr API including /api/v3. If Radarr is on the same machine: http://localhost:7878/api/v3">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </label>
+                                <input type="text" class="form-control" name="radarr_url"
+                                       value="{{.Config.RadarrURL}}" placeholder="http://localhost:7878/api/v3">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">API Key
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Radarr API Key"
+                                        data-bs-content="Found in Radarr → Settings → General → Security → API Key.">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control font-monospace" name="radarr_api_key"
+                                           value="{{.Config.RadarrAPIKey}}" autocomplete="off">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label">
+                                        Theater Offset
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Theater Offset"
+                                            data-bs-content="Adjusts Radarr theater release dates before writing to Google Calendar. Use -2 to move back two days, 2 to move forward two days, or 0 for no change.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="number" class="form-control" name="radarr_theater_day_offset"
+                                           value="{{.Config.RadarrTheaterDayOffset}}" min="-30" max="30" step="1">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">
+                                        Digital Offset
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Digital Offset"
+                                            data-bs-content="Adjusts Radarr digital release dates before writing to Google Calendar. Physical release dates still use the Digital Release event when Radarr has no digital date. Use -2 to move back two days, 2 to move forward two days, or 0 for no change.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="number" class="form-control" name="radarr_digital_day_offset"
+                                           value="{{.Config.RadarrDigitalDayOffset}}" min="-30" max="30" step="1">
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-3 flex-wrap" style="font-size:0.88rem;">
+                                <span class="text-muted">
+                                    Track:
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Radarr Release Types"
+                                        data-bs-content="Choose which Radarr release dates Calendarr writes. Digital Release uses Radarr's digital date first and falls back to physical release when digital is empty.">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </span>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" name="radarr_track_theater" id="radarr_track_theater"
+                                           {{if .Config.RadarrTrackTheater}}checked{{end}}>
+                                    <label class="form-check-label" for="radarr_track_theater">Theater Release</label>
+                                </div>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" name="radarr_track_digital" id="radarr_track_digital"
+                                           {{if .Config.RadarrTrackDigital}}checked{{end}}>
+                                    <label class="form-check-label" for="radarr_track_digital">Digital Release</label>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6 d-flex align-items-end pb-1">
-                            <p class="text-muted mb-0" style="font-size:0.83rem;">
+                    </div>
+                </div>
+
+                <!-- Sonarr -->
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                            <span><i class="bi bi-tv"></i> Sonarr</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="sonarr-result" class="badge d-none"></span>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('sonarr',this)">
+                                    <i class="bi bi-activity"></i> Test</button>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           name="use_sonarr" id="use_sonarr" {{if .Config.UseSonarr}}checked{{end}}>
+                                    <label class="form-check-label" for="use_sonarr">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">URL
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Sonarr URL"
+                                        data-bs-content="The full URL to your Sonarr API including /api/v3. If Sonarr is on the same machine: http://localhost:8989/api/v3">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </label>
+                                <input type="text" class="form-control" name="sonarr_url"
+                                       value="{{.Config.SonarrURL}}" placeholder="http://localhost:8989/api/v3">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">API Key
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Sonarr API Key"
+                                        data-bs-content="Found in Sonarr → Settings → General → Security → API Key.">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control font-monospace" name="sonarr_api_key"
+                                           value="{{.Config.SonarrAPIKey}}" autocomplete="off">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="form-label">
+                                    Episode Offset
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Episode Offset"
+                                        data-bs-content="Adjusts Sonarr episode air dates before writing to Google Calendar. Use -2 to move back two days, 2 to move forward two days, or 0 for no change.">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </label>
+                                <input type="number" class="form-control" name="sonarr_day_offset"
+                                       value="{{.Config.SonarrDayOffset}}" min="-30" max="30" step="1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Event Naming Templates -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-pencil-square"></i> Event Naming Templates
+                            <button type="button" class="help-btn ms-1" data-bs-toggle="popover"
+                                data-bs-placement="right" data-bs-title="Event Naming Templates" data-bs-html="true"
+                                data-bs-content="Customize how events appear in your Google Calendar.&lt;br&gt;&lt;br&gt;Available variables:&lt;br&gt;• &lt;code&gt;{title}&lt;/code&gt; — movie or show title&lt;br&gt;• &lt;code&gt;{season:02d}&lt;/code&gt; — season number (zero-padded)&lt;br&gt;• &lt;code&gt;{episode:02d}&lt;/code&gt; — episode number (zero-padded)&lt;br&gt;&lt;br&gt;&lt;strong&gt;Warning:&lt;/strong&gt; Changing templates after events already exist in your calendar will create duplicates. Run &lt;em&gt;Clean Up Past Events&lt;/em&gt; and then a fresh sync after changing.">
+                                <i class="bi bi-question-circle"></i></button>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Movie — Theater Release</label>
+                                    <input type="text" class="form-control font-monospace" name="movie_theater_template"
+                                           value="{{.Config.MovieTheaterTemplate}}"
+                                           placeholder="{title} Theater Release">
+                                    <div class="form-text">Variables: <code>{title}</code></div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Movie — Digital Release</label>
+                                    <input type="text" class="form-control font-monospace" name="movie_digital_template"
+                                           value="{{.Config.MovieDigitalTemplate}}"
+                                           placeholder="{title} Digital Release">
+                                    <div class="form-text">Variables: <code>{title}</code></div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">TV Episode</label>
+                                    <input type="text" class="form-control font-monospace" name="episode_template"
+                                           value="{{.Config.EpisodeTemplate}}"
+                                           placeholder="{title} S{season:02d}E{episode:02d}">
+                                    <div class="form-text">Variables: <code>{title}</code> <code>{season:02d}</code> <code>{episode:02d}</code></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ====================== Calendar tab ====================== -->
+        <div class="tab-pane fade" id="tab-calendar" role="tabpanel" aria-labelledby="tab-calendar-btn">
+            <div class="row g-3">
+
+                <!-- Google Calendar -->
+                <div class="col-md-6">
+                    <div class="card h-100" id="google-calendar-card">
+                        <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                            <span><i class="bi bi-google"></i> Google Calendar</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="calendar-result" class="badge d-none"></span>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('calendar',this)">
+                                    <i class="bi bi-activity"></i> Test</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            {{if .Config.GoogleRefreshToken}}
+                            <div class="mb-3">
+                                <span class="badge bg-success px-3 py-2" style="font-size:0.9rem;">
+                                    <i class="bi bi-check-circle-fill me-1"></i>Connected
+                                </span>
+                            </div>
+                            <p class="text-muted mb-3" style="font-size:0.85rem;">
+                                Calendarr has access to your Google Calendar and will sync events on the next scheduled run.
+                            </p>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="disconnectGoogle()">
+                                <i class="bi bi-x-circle me-1"></i>Disconnect
+                            </button>
+                            {{else}}
+                            <p class="text-muted mb-3" style="font-size:0.87rem;">
+                                Connect your Google account so Calendarr can write events to your calendar.
+                            </p>
+                            <a href="/oauth/start" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
+                                <i class="bi bi-google me-1"></i> Connect Google Calendar
+                            </a>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendar Targets -->
+                {{if .Config.GoogleRefreshToken}}
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                            <span><i class="bi bi-calendar3"></i> Calendar Targets</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="add-calendar-target" title="Add calendar target">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end mb-2">
+                                <div class="col-md-3">
+                                    <span class="form-label mb-0">
+                                        Google calendars
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Calendar Targets"
+                                            data-bs-content="Choose up to five Google calendars. Radarr and Sonarr toggles decide which releases are written to each calendar. Disabling a source stops future sync and update work for that calendar; it does not delete existing events.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </span>
+                                </div>
+                            </div>
+                            <div id="calendar-targets"
+                                 {{range $i, $t := .Config.CalendarTargets}}
+                                 data-target-{{$i}}-id="{{$t.ID}}"
+                                 data-target-{{$i}}-name="{{$t.Name}}"
+                                 data-target-{{$i}}-radarr="{{if $t.RadarrEnabled}}1{{else}}0{{end}}"
+                                 data-target-{{$i}}-sonarr="{{if $t.SonarrEnabled}}1{{else}}0{{end}}"
+                                 data-target-{{$i}}-radarr-color="{{$t.RadarrColorID}}"
+                                 data-target-{{$i}}-sonarr-color="{{$t.SonarrColorID}}"
+                                 {{end}}
+                                 data-target-count="{{len .Config.CalendarTargets}}">
+                                <div class="text-muted" style="font-size:0.85rem;">Loading calendars...</div>
+                            </div>
+                            <div id="calendar-load-error" class="text-danger mt-2 d-none" style="font-size:0.82rem;"></div>
+                            <div id="calendar-target-action" class="alert mt-3 d-none" style="font-size:0.86rem;"></div>
+                            <div id="calendar-target-status" class="text-muted mt-2" style="font-size:0.82rem;"></div>
+                            <p class="text-muted mt-2 mb-0" style="font-size:0.83rem;">
                                 <i class="bi bi-info-circle me-1"></i>
-                                Logs are stored as daily files in the <code>logs/</code> folder.
-                                Oldest files and history entries are pruned automatically when their limits are exceeded.
+                                Blank and duplicate calendars are ignored when settings are saved. Save Settings after changing targets.
                             </p>
                         </div>
                     </div>
                 </div>
+                {{end}}
+
             </div>
         </div>
 
-        <!-- Radarr -->
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
-                    <span><i class="bi bi-film"></i> Radarr</span>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="radarr-result" class="badge d-none"></span>
-                        <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('radarr',this)">
-                            <i class="bi bi-activity"></i> Test</button>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" role="switch"
-                                   name="use_radarr" id="use_radarr" {{if .Config.UseRadarr}}checked{{end}}>
-                            <label class="form-check-label" for="use_radarr">Enabled</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">URL
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="Radarr URL"
-                                data-bs-content="The full URL to your Radarr API including /api/v3. If Radarr is on the same machine: http://localhost:7878/api/v3">
-                                <i class="bi bi-question-circle"></i></button>
-                        </label>
-                        <input type="text" class="form-control" name="radarr_url"
-                               value="{{.Config.RadarrURL}}" placeholder="http://localhost:7878/api/v3">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">API Key
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="Radarr API Key"
-                                data-bs-content="Found in Radarr → Settings → General → Security → API Key.">
-                                <i class="bi bi-question-circle"></i></button>
-                        </label>
-                        <div class="input-group">
-                            <input type="password" class="form-control font-monospace" name="radarr_api_key"
-                                   value="{{.Config.RadarrAPIKey}}" autocomplete="off">
-                            <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label">
-                                Theater Offset
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Theater Offset"
-                                    data-bs-content="Adjusts Radarr theater release dates before writing to Google Calendar. Use -2 to move back two days, 2 to move forward two days, or 0 for no change.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <input type="number" class="form-control" name="radarr_theater_day_offset"
-                                   value="{{.Config.RadarrTheaterDayOffset}}" min="-30" max="30" step="1">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">
-                                Digital Offset
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Digital Offset"
-                                    data-bs-content="Adjusts Radarr digital release dates before writing to Google Calendar. Physical release dates still use the Digital Release event when Radarr has no digital date. Use -2 to move back two days, 2 to move forward two days, or 0 for no change.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <input type="number" class="form-control" name="radarr_digital_day_offset"
-                                   value="{{.Config.RadarrDigitalDayOffset}}" min="-30" max="30" step="1">
-                        </div>
-                    </div>
-                    <div class="d-flex align-items-center gap-3 flex-wrap" style="font-size:0.88rem;">
-                        <span class="text-muted">
-                            Track:
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="Radarr Release Types"
-                                data-bs-content="Choose which Radarr release dates Calendarr writes. Digital Release uses Radarr's digital date first and falls back to physical release when digital is empty.">
-                                <i class="bi bi-question-circle"></i></button>
-                        </span>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="radarr_track_theater" id="radarr_track_theater"
-                                   {{if .Config.RadarrTrackTheater}}checked{{end}}>
-                            <label class="form-check-label" for="radarr_track_theater">Theater Release</label>
-                        </div>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="radarr_track_digital" id="radarr_track_digital"
-                                   {{if .Config.RadarrTrackDigital}}checked{{end}}>
-                            <label class="form-check-label" for="radarr_track_digital">Digital Release</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- ====================== Notifications tab ====================== -->
+        <div class="tab-pane fade" id="tab-notifications" role="tabpanel" aria-labelledby="tab-notifications-btn">
+            <div class="row g-3">
 
-        <!-- Sonarr -->
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
-                    <span><i class="bi bi-tv"></i> Sonarr</span>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="sonarr-result" class="badge d-none"></span>
-                        <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('sonarr',this)">
-                            <i class="bi bi-activity"></i> Test</button>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" role="switch"
-                                   name="use_sonarr" id="use_sonarr" {{if .Config.UseSonarr}}checked{{end}}>
-                            <label class="form-check-label" for="use_sonarr">Enabled</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">URL
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="Sonarr URL"
-                                data-bs-content="The full URL to your Sonarr API including /api/v3. If Sonarr is on the same machine: http://localhost:8989/api/v3">
-                                <i class="bi bi-question-circle"></i></button>
-                        </label>
-                        <input type="text" class="form-control" name="sonarr_url"
-                               value="{{.Config.SonarrURL}}" placeholder="http://localhost:8989/api/v3">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">API Key
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="Sonarr API Key"
-                                data-bs-content="Found in Sonarr → Settings → General → Security → API Key.">
-                                <i class="bi bi-question-circle"></i></button>
-                        </label>
-                        <div class="input-group">
-                            <input type="password" class="form-control font-monospace" name="sonarr_api_key"
-                                   value="{{.Config.SonarrAPIKey}}" autocomplete="off">
-                            <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="form-label">
-                            Episode Offset
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="Episode Offset"
-                                data-bs-content="Adjusts Sonarr episode air dates before writing to Google Calendar. Use -2 to move back two days, 2 to move forward two days, or 0 for no change.">
-                                <i class="bi bi-question-circle"></i></button>
-                        </label>
-                        <input type="number" class="form-control" name="sonarr_day_offset"
-                               value="{{.Config.SonarrDayOffset}}" min="-30" max="30" step="1">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Google Calendar -->
-        <div class="col-md-4">
-            <div class="card h-100" id="google-calendar-card">
-                <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
-                    <span><i class="bi bi-google"></i> Google Calendar</span>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="calendar-result" class="badge d-none"></span>
-                        <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('calendar',this)">
-                            <i class="bi bi-activity"></i> Test</button>
-                    </div>
-                </div>
-                <div class="card-body">
-                    {{if .Config.GoogleRefreshToken}}
-                    <div class="mb-3">
-                        <span class="badge bg-success px-3 py-2" style="font-size:0.9rem;">
-                            <i class="bi bi-check-circle-fill me-1"></i>Connected
-                        </span>
-                    </div>
-                    <p class="text-muted mb-3" style="font-size:0.85rem;">
-                        Calendarr has access to your Google Calendar and will sync events on the next scheduled run.
-                    </p>
-                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="disconnectGoogle()">
-                        <i class="bi bi-x-circle me-1"></i>Disconnect
-                    </button>
-                    {{else}}
-                    <p class="text-muted mb-3" style="font-size:0.87rem;">
-                        Connect your Google account so Calendarr can write events to your calendar.
-                    </p>
-                    <a href="/oauth/start" target="_blank" rel="noopener" class="btn btn-sm btn-primary w-100">
-                        <i class="bi bi-google me-1"></i> Connect Google Calendar
-                    </a>
-                    {{end}}
-                </div>
-            </div>
-        </div>
-
-        <!-- Calendar Targets -->
-        {{if .Config.GoogleRefreshToken}}
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex align-items-center justify-content-between gap-2">
-                    <span><i class="bi bi-calendar3"></i> Calendar Targets</span>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="add-calendar-target" title="Add calendar target">
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3 align-items-end mb-2">
-                        <div class="col-md-3">
-                            <span class="form-label mb-0">
-                                Google calendars
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Calendar Targets"
-                                    data-bs-content="Choose up to five Google calendars. Radarr and Sonarr toggles decide which releases are written to each calendar. Disabling a source stops future sync and update work for that calendar; it does not delete existing events.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </span>
-                        </div>
-                    </div>
-                    <div id="calendar-targets"
-                         {{range $i, $t := .Config.CalendarTargets}}
-                         data-target-{{$i}}-id="{{$t.ID}}"
-                         data-target-{{$i}}-name="{{$t.Name}}"
-                         data-target-{{$i}}-radarr="{{if $t.RadarrEnabled}}1{{else}}0{{end}}"
-                         data-target-{{$i}}-sonarr="{{if $t.SonarrEnabled}}1{{else}}0{{end}}"
-                         data-target-{{$i}}-radarr-color="{{$t.RadarrColorID}}"
-                         data-target-{{$i}}-sonarr-color="{{$t.SonarrColorID}}"
-                         {{end}}
-                         data-target-count="{{len .Config.CalendarTargets}}">
-                        <div class="text-muted" style="font-size:0.85rem;">Loading calendars...</div>
-                    </div>
-                    <div id="calendar-load-error" class="text-danger mt-2 d-none" style="font-size:0.82rem;"></div>
-                    <div id="calendar-target-action" class="alert mt-3 d-none" style="font-size:0.86rem;"></div>
-                    <div id="calendar-target-status" class="text-muted mt-2" style="font-size:0.82rem;"></div>
-                    <p class="text-muted mt-2 mb-0" style="font-size:0.83rem;">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Blank and duplicate calendars are ignored when settings are saved. Save Settings after changing targets.
-                    </p>
-                </div>
-            </div>
-        </div>
-        {{end}}
-
-        <!-- Pushover (full width) -->
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
-                    <span><i class="bi bi-bell-fill"></i> Pushover Notifications</span>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="pushover-result" class="badge d-none"></span>
-                        <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('pushover',this)">
-                            <i class="bi bi-activity"></i> Test</button>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" role="switch"
-                                   name="use_pushover" id="use_pushover"
-                                   {{if .Config.UsePushover}}checked{{end}}>
-                            <label class="form-check-label" for="use_pushover">Enabled</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label">App Token
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Pushover App Token" data-bs-html="true"
-                                    data-bs-content="The API token for your Pushover application.&lt;br&gt;&lt;br&gt;Log in at &lt;strong&gt;pushover.net&lt;/strong&gt; → scroll to &lt;strong&gt;Your Applications&lt;/strong&gt; → &lt;strong&gt;Create an Application/API Token&lt;/strong&gt;.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <div class="input-group">
-                                <input type="password" class="form-control font-monospace" name="pushover_app_token"
-                                       value="{{.Config.PushoverToken}}" autocomplete="off">
-                                <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
-                                    <i class="bi bi-eye"></i>
-                                </button>
+                <!-- Pushover -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                            <span><i class="bi bi-bell-fill"></i> Pushover Notifications</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="pushover-result" class="badge d-none"></span>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('pushover',this)">
+                                    <i class="bi bi-activity"></i> Test</button>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           name="use_pushover" id="use_pushover"
+                                           {{if .Config.UsePushover}}checked{{end}}>
+                                    <label class="form-check-label" for="use_pushover">Enabled</label>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">User Key
-                                <button type="button" class="help-btn" data-bs-toggle="popover"
-                                    data-bs-placement="right" data-bs-title="Pushover User Key"
-                                    data-bs-content="Your personal Pushover user key. Found at the top of the pushover.net dashboard after logging in, labelled Your User Key.">
-                                    <i class="bi bi-question-circle"></i></button>
-                            </label>
-                            <div class="input-group">
-                                <input type="password" class="form-control font-monospace" name="pushover_user_key"
-                                       value="{{.Config.PushoverUser}}" autocomplete="off">
-                                <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
-                                    <i class="bi bi-eye"></i>
-                                </button>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label">App Token
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Pushover App Token" data-bs-html="true"
+                                            data-bs-content="The API token for your Pushover application.&lt;br&gt;&lt;br&gt;Log in at &lt;strong&gt;pushover.net&lt;/strong&gt; → scroll to &lt;strong&gt;Your Applications&lt;/strong&gt; → &lt;strong&gt;Create an Application/API Token&lt;/strong&gt;.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control font-monospace" name="pushover_app_token"
+                                               value="{{.Config.PushoverToken}}" autocomplete="off">
+                                        <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">User Key
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Pushover User Key"
+                                            data-bs-content="Your personal Pushover user key. Found at the top of the pushover.net dashboard after logging in, labelled Your User Key.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control font-monospace" name="pushover_user_key"
+                                               value="{{.Config.PushoverUser}}" autocomplete="off">
+                                        <button type="button" class="btn btn-outline-secondary" onclick="toggleSecret(this)" tabindex="-1" title="Show/hide">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Notification Sound</label>
+                                    {{$snd := .Config.PushoverSound}}
+                                    <select class="form-select" name="pushover_sound">
+                                        <option value="pushover"     {{if eq $snd "pushover"}}selected{{end}}>Pushover</option>
+                                        <option value="bike"         {{if eq $snd "bike"}}selected{{end}}>Bike</option>
+                                        <option value="bugle"        {{if eq $snd "bugle"}}selected{{end}}>Bugle</option>
+                                        <option value="cashregister" {{if eq $snd "cashregister"}}selected{{end}}>Cash Register</option>
+                                        <option value="classical"    {{if eq $snd "classical"}}selected{{end}}>Classical</option>
+                                        <option value="cosmic"       {{if eq $snd "cosmic"}}selected{{end}}>Cosmic</option>
+                                        <option value="falling"      {{if eq $snd "falling"}}selected{{end}}>Falling</option>
+                                        <option value="gamelan"      {{if eq $snd "gamelan"}}selected{{end}}>Gamelan</option>
+                                        <option value="incoming"     {{if eq $snd "incoming"}}selected{{end}}>Incoming</option>
+                                        <option value="intermission" {{if or (eq $snd "intermission") (eq $snd "")}}selected{{end}}>Intermission (default)</option>
+                                        <option value="magic"        {{if eq $snd "magic"}}selected{{end}}>Magic</option>
+                                        <option value="mechanical"   {{if eq $snd "mechanical"}}selected{{end}}>Mechanical</option>
+                                        <option value="pianobar"     {{if eq $snd "pianobar"}}selected{{end}}>Piano Bar</option>
+                                        <option value="siren"        {{if eq $snd "siren"}}selected{{end}}>Siren</option>
+                                        <option value="spacealarm"   {{if eq $snd "spacealarm"}}selected{{end}}>Space Alarm</option>
+                                        <option value="tugboat"      {{if eq $snd "tugboat"}}selected{{end}}>Tugboat</option>
+                                        <option value="alien"        {{if eq $snd "alien"}}selected{{end}}>Alien Alarm</option>
+                                        <option value="climb"        {{if eq $snd "climb"}}selected{{end}}>Climb</option>
+                                        <option value="persistent"   {{if eq $snd "persistent"}}selected{{end}}>Persistent</option>
+                                        <option value="echo"         {{if eq $snd "echo"}}selected{{end}}>Echo</option>
+                                        <option value="updown"       {{if eq $snd "updown"}}selected{{end}}>Up Down</option>
+                                        <option value="vibrate"      {{if eq $snd "vibrate"}}selected{{end}}>Vibrate Only</option>
+                                        <option value="none"         {{if eq $snd "none"}}selected{{end}}>Silent</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Notification Sound</label>
-                            {{$snd := .Config.PushoverSound}}
-                            <select class="form-select" name="pushover_sound">
-                                <option value="pushover"     {{if eq $snd "pushover"}}selected{{end}}>Pushover</option>
-                                <option value="bike"         {{if eq $snd "bike"}}selected{{end}}>Bike</option>
-                                <option value="bugle"        {{if eq $snd "bugle"}}selected{{end}}>Bugle</option>
-                                <option value="cashregister" {{if eq $snd "cashregister"}}selected{{end}}>Cash Register</option>
-                                <option value="classical"    {{if eq $snd "classical"}}selected{{end}}>Classical</option>
-                                <option value="cosmic"       {{if eq $snd "cosmic"}}selected{{end}}>Cosmic</option>
-                                <option value="falling"      {{if eq $snd "falling"}}selected{{end}}>Falling</option>
-                                <option value="gamelan"      {{if eq $snd "gamelan"}}selected{{end}}>Gamelan</option>
-                                <option value="incoming"     {{if eq $snd "incoming"}}selected{{end}}>Incoming</option>
-                                <option value="intermission" {{if or (eq $snd "intermission") (eq $snd "")}}selected{{end}}>Intermission (default)</option>
-                                <option value="magic"        {{if eq $snd "magic"}}selected{{end}}>Magic</option>
-                                <option value="mechanical"   {{if eq $snd "mechanical"}}selected{{end}}>Mechanical</option>
-                                <option value="pianobar"     {{if eq $snd "pianobar"}}selected{{end}}>Piano Bar</option>
-                                <option value="siren"        {{if eq $snd "siren"}}selected{{end}}>Siren</option>
-                                <option value="spacealarm"   {{if eq $snd "spacealarm"}}selected{{end}}>Space Alarm</option>
-                                <option value="tugboat"      {{if eq $snd "tugboat"}}selected{{end}}>Tugboat</option>
-                                <option value="alien"        {{if eq $snd "alien"}}selected{{end}}>Alien Alarm</option>
-                                <option value="climb"        {{if eq $snd "climb"}}selected{{end}}>Climb</option>
-                                <option value="persistent"   {{if eq $snd "persistent"}}selected{{end}}>Persistent</option>
-                                <option value="echo"         {{if eq $snd "echo"}}selected{{end}}>Echo</option>
-                                <option value="updown"       {{if eq $snd "updown"}}selected{{end}}>Up Down</option>
-                                <option value="vibrate"      {{if eq $snd "vibrate"}}selected{{end}}>Vibrate Only</option>
-                                <option value="none"         {{if eq $snd "none"}}selected{{end}}>Silent</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="d-flex align-items-center gap-3 flex-wrap mt-3" style="font-size:0.88rem;">
-                        <span class="text-muted">Notify for:</span>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="pushover_on_added" id="pushover_on_added"
-                                   {{if .Config.PushoverOnAdded}}checked{{end}}>
-                            <label class="form-check-label" for="pushover_on_added">Added</label>
-                        </div>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="pushover_on_updated" id="pushover_on_updated"
-                                   {{if .Config.PushoverOnUpdated}}checked{{end}}>
-                            <label class="form-check-label" for="pushover_on_updated">Updated</label>
-                        </div>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="pushover_on_deleted" id="pushover_on_deleted"
-                                   {{if .Config.PushoverOnDeleted}}checked{{end}}>
-                            <label class="form-check-label" for="pushover_on_deleted">Deleted <span class="text-muted" style="font-size:0.8rem;">(incl. cleanup)</span></label>
-                        </div>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="pushover_on_error" id="pushover_on_error"
-                                   {{if .Config.PushoverOnError}}checked{{end}}>
-                            <label class="form-check-label" for="pushover_on_error">Errors <span class="text-muted" style="font-size:0.8rem;">(sync failures)</span></label>
-                        </div>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="pushover_on_update_available" id="pushover_on_update_available"
-                                   {{if .Config.PushoverOnUpdate}}checked{{end}}>
-                            <label class="form-check-label" for="pushover_on_update_available">Update Available</label>
+                            <div class="d-flex align-items-center gap-3 flex-wrap mt-3" style="font-size:0.88rem;">
+                                <span class="text-muted">Notify for:</span>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" name="pushover_on_added" id="pushover_on_added"
+                                           {{if .Config.PushoverOnAdded}}checked{{end}}>
+                                    <label class="form-check-label" for="pushover_on_added">Added</label>
+                                </div>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" name="pushover_on_updated" id="pushover_on_updated"
+                                           {{if .Config.PushoverOnUpdated}}checked{{end}}>
+                                    <label class="form-check-label" for="pushover_on_updated">Updated</label>
+                                </div>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" name="pushover_on_deleted" id="pushover_on_deleted"
+                                           {{if .Config.PushoverOnDeleted}}checked{{end}}>
+                                    <label class="form-check-label" for="pushover_on_deleted">Deleted <span class="text-muted" style="font-size:0.8rem;">(incl. cleanup)</span></label>
+                                </div>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" name="pushover_on_error" id="pushover_on_error"
+                                           {{if .Config.PushoverOnError}}checked{{end}}>
+                                    <label class="form-check-label" for="pushover_on_error">Errors <span class="text-muted" style="font-size:0.8rem;">(sync failures)</span></label>
+                                </div>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" name="pushover_on_update_available" id="pushover_on_update_available"
+                                           {{if .Config.PushoverOnUpdate}}checked{{end}}>
+                                    <label class="form-check-label" for="pushover_on_update_available">Update Available</label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
 
-        <!-- Event Naming Templates -->
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-pencil-square"></i> Event Naming Templates
-                    <button type="button" class="help-btn ms-1" data-bs-toggle="popover"
-                        data-bs-placement="right" data-bs-title="Event Naming Templates" data-bs-html="true"
-                        data-bs-content="Customize how events appear in your Google Calendar.&lt;br&gt;&lt;br&gt;Available variables:&lt;br&gt;• &lt;code&gt;{title}&lt;/code&gt; — movie or show title&lt;br&gt;• &lt;code&gt;{season:02d}&lt;/code&gt; — season number (zero-padded)&lt;br&gt;• &lt;code&gt;{episode:02d}&lt;/code&gt; — episode number (zero-padded)&lt;br&gt;&lt;br&gt;&lt;strong&gt;Warning:&lt;/strong&gt; Changing templates after events already exist in your calendar will create duplicates. Run &lt;em&gt;Clean Up Past Events&lt;/em&gt; and then a fresh sync after changing.">
-                        <i class="bi bi-question-circle"></i></button>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Movie — Theater Release</label>
-                            <input type="text" class="form-control font-monospace" name="movie_theater_template"
-                                   value="{{.Config.MovieTheaterTemplate}}"
-                                   placeholder="{title} Theater Release">
-                            <div class="form-text">Variables: <code>{title}</code></div>
+        <!-- ====================== Security & Backup tab ====================== -->
+        <!-- Sibling of the other tab panes so Bootstrap toggles them as one group. -->
+        <!-- The Restore form lives outside settings-form (below) and the file input -->
+        <!-- + submit button use form="restore-form" so they post to /restore without -->
+        <!-- nesting one form inside another. -->
+        <div class="tab-pane fade" id="tab-security-backup" role="tabpanel" aria-labelledby="tab-security-backup-btn">
+            <div class="row g-3">
+
+                <!-- Web UI Password -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex align-items-center gap-2">
+                            <span><i class="bi bi-shield-lock"></i> Web UI Password</span>
+                            {{if .Config.WebUIPasswordHash}}
+                                <span class="badge bg-success">Set</span>
+                            {{else}}
+                                <span class="badge bg-secondary">Not set</span>
+                            {{end}}
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Movie — Digital Release</label>
-                            <input type="text" class="form-control font-monospace" name="movie_digital_template"
-                                   value="{{.Config.MovieDigitalTemplate}}"
-                                   placeholder="{title} Digital Release">
-                            <div class="form-text">Variables: <code>{title}</code></div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">TV Episode</label>
-                            <input type="text" class="form-control font-monospace" name="episode_template"
-                                   value="{{.Config.EpisodeTemplate}}"
-                                   placeholder="{title} S{season:02d}E{episode:02d}">
-                            <div class="form-text">Variables: <code>{title}</code> <code>{season:02d}</code> <code>{episode:02d}</code></div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3" style="font-size:0.88rem;">
+                                Required when Web UI Access is set to <strong>Local network</strong>.
+                                Optional but recommended even on Local only.
+                                A service restart logs everyone out, so set this once and you should not need to change it often.
+                            </p>
+                            <div class="row g-3 align-items-end">
+                                {{if .Config.WebUIPasswordHash}}
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        Current Password
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Current Password"
+                                            data-bs-content="Required to change or remove the existing Web UI password.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="password" class="form-control" id="webui-old-password"
+                                           autocomplete="current-password">
+                                </div>
+                                {{end}}
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        New Password
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="New Password"
+                                            data-bs-content="Minimum 8 characters, maximum 72.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="password" class="form-control" id="webui-new-password"
+                                           autocomplete="new-password" minlength="8" maxlength="72">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Confirm New Password</label>
+                                    <input type="password" class="form-control" id="webui-confirm-password"
+                                           autocomplete="new-password" minlength="8" maxlength="72">
+                                </div>
+                                <div class="col-md-3 d-flex flex-column gap-2">
+                                    <button type="button" class="btn btn-primary btn-sm" id="webui-set-password-btn">
+                                        <i class="bi bi-shield-lock"></i> {{if .Config.WebUIPasswordHash}}Change Password{{else}}Set Password{{end}}
+                                    </button>
+                                    {{if .Config.WebUIPasswordHash}}
+                                    <button type="button" class="btn btn-outline-danger btn-sm" id="webui-clear-password-btn">
+                                        <i class="bi bi-x-circle"></i> Remove Password
+                                    </button>
+                                    {{end}}
+                                </div>
+                            </div>
+                            <div id="webui-password-status" class="mt-2" style="font-size:0.85rem; min-height:1.2rem;"></div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Backup -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header"><i class="bi bi-download"></i> Backup Settings</div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3" style="font-size:0.88rem;">
+                                Download a ZIP containing your <code>config.json</code> and <code>ignored_shows.json</code>.
+                                Use this to keep a copy or transfer your full setup to another machine.
+                            </p>
+                            <div class="alert alert-warning py-2" style="font-size:0.85rem;">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                Backups contain API keys and Google access tokens. Store them like passwords.
+                            </div>
+                            <a href="/backup" class="btn btn-outline-secondary">
+                                <i class="bi bi-download"></i> Download Backup
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Restore -->
+                <div class="col-md-7">
+                    <div class="card h-100">
+                        <div class="card-header"><i class="bi bi-upload"></i> Restore Settings</div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3" style="font-size:0.88rem;">
+                                Upload a <code>.zip</code> backup to restore your settings and ignored shows list.
+                                <strong>This overwrites your current config immediately.</strong>
+                            </p>
+                            <!-- Inputs are associated with the standalone <form id="restore-form"> below
+                                 via the form="restore-form" attribute, so this control sits inside
+                                 settings-form visually but submits to /restore independently. -->
+                            <div class="d-flex gap-2 align-items-center">
+                                <input type="file" class="form-control form-control-sm" name="config_file" form="restore-form" accept=".zip" style="max-width:280px;" id="restore-file" required>
+                                <button type="submit" class="btn btn-outline-warning btn-sm" form="restore-form" id="restore-submit" disabled>
+                                    <i class="bi bi-upload"></i> Restore
+                                </button>
+                            </div>
+                            <script>
+                            (function () {
+                                var f = document.getElementById('restore-file');
+                                var b = document.getElementById('restore-submit');
+                                if (f && b) {
+                                    f.addEventListener('change', function () { b.disabled = !f.files || f.files.length === 0; });
+                                }
+                            })();
+                            </script>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
     </div>
 </form>
 
-<!-- Web UI Security -->
-<hr class="my-4" style="border-color:var(--border);">
-<h5 class="mb-3" style="color:var(--text);"><i class="bi bi-shield-lock"></i> Web UI Security</h5>
-<div class="row g-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex align-items-center gap-2">
-                <span>Web UI Password</span>
-                {{if .Config.WebUIPasswordHash}}
-                    <span class="badge bg-success">Set</span>
-                {{else}}
-                    <span class="badge bg-secondary">Not set</span>
-                {{end}}
-            </div>
-            <div class="card-body">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">
-                    Required when Web UI Access is set to <strong>Local network</strong>.
-                    Optional but recommended even on Local only.
-                    A service restart logs everyone out, so set this once and you should not need to change it often.
-                </p>
-                <div class="row g-3 align-items-end">
-                    {{if .Config.WebUIPasswordHash}}
-                    <div class="col-md-3">
-                        <label class="form-label">
-                            Current Password
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="Current Password"
-                                data-bs-content="Required to change or remove the existing Web UI password.">
-                                <i class="bi bi-question-circle"></i></button>
-                        </label>
-                        <input type="password" class="form-control" id="webui-old-password"
-                               autocomplete="current-password">
-                    </div>
-                    {{end}}
-                    <div class="col-md-3">
-                        <label class="form-label">
-                            New Password
-                            <button type="button" class="help-btn" data-bs-toggle="popover"
-                                data-bs-placement="right" data-bs-title="New Password"
-                                data-bs-content="Minimum 8 characters, maximum 72.">
-                                <i class="bi bi-question-circle"></i></button>
-                        </label>
-                        <input type="password" class="form-control" id="webui-new-password"
-                               autocomplete="new-password" minlength="8" maxlength="72">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Confirm New Password</label>
-                        <input type="password" class="form-control" id="webui-confirm-password"
-                               autocomplete="new-password" minlength="8" maxlength="72">
-                    </div>
-                    <div class="col-md-3 d-flex flex-column gap-2">
-                        <button type="button" class="btn btn-primary btn-sm" id="webui-set-password-btn">
-                            <i class="bi bi-shield-lock"></i> {{if .Config.WebUIPasswordHash}}Change Password{{else}}Set Password{{end}}
-                        </button>
-                        {{if .Config.WebUIPasswordHash}}
-                        <button type="button" class="btn btn-outline-danger btn-sm" id="webui-clear-password-btn">
-                            <i class="bi bi-x-circle"></i> Remove Password
-                        </button>
-                        {{end}}
-                    </div>
-                </div>
-                <div id="webui-password-status" class="mt-2" style="font-size:0.85rem; min-height:1.2rem;"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Backup / Restore -->
-<hr class="my-4" style="border-color:var(--border);">
-<h5 class="mb-3" style="color:var(--text);"><i class="bi bi-archive"></i> Backup &amp; Restore</h5>
-<div class="row g-3">
-    <div class="col-md-5">
-        <div class="card">
-            <div class="card-header">Backup Settings</div>
-            <div class="card-body">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">
-                    Download a ZIP containing your <code>config.json</code> and <code>ignored_shows.json</code>.
-                    Use this to keep a copy or transfer your full setup to another machine.
-                </p>
-                <div class="alert alert-warning py-2" style="font-size:0.85rem;">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                    Backups contain API keys and Google access tokens. Store them like passwords.
-                </div>
-                <a href="/backup" class="btn btn-outline-secondary">
-                    <i class="bi bi-download"></i> Download Backup
-                </a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-7">
-        <div class="card">
-            <div class="card-header">Restore Settings</div>
-            <div class="card-body">
-                <p class="text-muted mb-3" style="font-size:0.88rem;">
-                    Upload a <code>.zip</code> backup to restore your settings and ignored shows list.
-                    <strong>This overwrites your current config immediately.</strong>
-                </p>
-                <form method="post" action="/restore" enctype="multipart/form-data" class="d-flex gap-2 align-items-center" id="restore-form">
-                    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-                    <input type="file" class="form-control form-control-sm" name="config_file" accept=".zip" style="max-width:280px;" id="restore-file" required>
-                    <button type="submit" class="btn btn-outline-warning btn-sm" id="restore-submit" disabled>
-                        <i class="bi bi-upload"></i> Restore
-                    </button>
-                </form>
-                <script>
-                (function () {
-                    var f = document.getElementById('restore-file');
-                    var b = document.getElementById('restore-submit');
-                    if (f && b) {
-                        f.addEventListener('change', function () { b.disabled = !f.files || f.files.length === 0; });
-                    }
-                })();
-                </script>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Standalone restore form. Lives outside settings-form so it's not nested.
+     The file input + submit button up in the Security & Backup tab use
+     form="restore-form" to associate with this form. -->
+<form method="post" action="/restore" enctype="multipart/form-data" id="restore-form">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+</form>
 {{end}}
 
 {{define "scripts"}}
 <script>
 document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
     new bootstrap.Popover(el, { trigger: 'hover focus', container: 'body', html: el.dataset.bsHtml === 'true' });
+});
+
+// ---- Settings tab navigation ----------------------------------------------
+const TAB_HASHES = {
+    '#general':         '#tab-general',
+    '#media':           '#tab-media',
+    '#calendar':        '#tab-calendar',
+    '#notifications':   '#tab-notifications',
+    '#security-backup': '#tab-security-backup',
+};
+
+(function activateTabFromHash() {
+    const target = TAB_HASHES[window.location.hash];
+    if (!target) return;
+    const btn = document.querySelector(`[data-bs-target="${target}"]`);
+    if (btn && window.bootstrap && bootstrap.Tab) {
+        bootstrap.Tab.getOrCreateInstance(btn).show();
+    }
+})();
+
+document.querySelectorAll('#settings-tabs button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', e => {
+        const target = e.target.getAttribute('data-bs-target') || '';
+        const slug = target.replace('#tab-', '');
+        if (slug) history.replaceState(null, '', '#' + slug);
+    });
 });
 
 function toggleSecret(btn) {
@@ -747,12 +849,12 @@ settingsForm.addEventListener('submit', function(e) {
 });
 
 settingsForm.addEventListener('change', function(e) {
-    if (e.target.closest('#calendar-targets')) return;
+    if (e.target.closest('#calendar-targets') || e.target.closest('#tab-security-backup')) return;
     scheduleAutosave(0);
 });
 
 settingsForm.addEventListener('input', function(e) {
-    if (e.target.closest('#calendar-targets')) return;
+    if (e.target.closest('#calendar-targets') || e.target.closest('#tab-security-backup')) return;
     if (e.target.matches('input[type="text"], input[type="password"], input[type="number"], select')) {
         settingsDirty = true;
         setSaveStatus('Unsaved changes', 'warning');
@@ -760,7 +862,7 @@ settingsForm.addEventListener('input', function(e) {
 });
 
 settingsForm.addEventListener('focusout', function(e) {
-    if (e.target.closest('#calendar-targets')) return;
+    if (e.target.closest('#calendar-targets') || e.target.closest('#tab-security-backup')) return;
     if (e.target.matches('input, select, textarea')) {
         autosaveSettingsNow();
     }
