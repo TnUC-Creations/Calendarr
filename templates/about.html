@@ -308,6 +308,19 @@
     <div class="card-body p-0">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.8.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Sync interval changes now take effect right away instead of waiting for the old timer.</li>
+                <li>Cleaning up a single calendar runs in the background so the page stays responsive on big calendars.</li>
+                <li>The cleanup confirmation now shows your actual event template text instead of the default labels.</li>
+                <li>Connecting Google Calendar handles two browser tabs starting the flow at once without one cancelling the other.</li>
+                <li>Restoring a backup now fixes any odd values the same way a fresh install would, and refuses to restore a backup that would open the web UI to your network without a password.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.7.1</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
@@ -355,21 +368,21 @@
                 <li>Added an Errors option in Pushover settings to get notified when a sync fails.</li>
             </ul>
         </div>
-        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="badge bg-primary px-2">v1.5.8</span>
-                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
-            </div>
-            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
-                <li>Added a shameless donation link to the About page. No pressure, but the coffee helps.</li>
-            </ul>
-        </div>
         <div class="p-2 text-center" style="border-top:1px solid var(--border);">
             <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
                 <i class="bi bi-chevron-down me-1"></i>Show older versions
             </button>
         </div>
         <div class="collapse" id="older-changelog">
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-secondary px-2">v1.5.8</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Added a shameless donation link to the About page. No pressure, but the coffee helps.</li>
+            </ul>
+        </div>
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-secondary px-2">v1.5.7</span>

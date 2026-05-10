@@ -333,6 +333,7 @@ func cleanupTargetCalendar(cfg Config, calendarID, mode string, sources []string
 			deleted++
 			deletedMessages = append(deletedMessages, ev.Summary+" removed from calendar")
 		}
+		updateCleanupProgress(scanned, deleted)
 		pageToken = res.NextPageToken
 		if pageToken == "" {
 			break

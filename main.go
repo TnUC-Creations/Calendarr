@@ -19,7 +19,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.7.1"
+	appVersion = "1.8.0"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -230,14 +230,26 @@ func backgroundScheduler() {
 	for {
 		cfg, _ = loadConfig()
 		interval := time.Duration(cfg.RunIntervalHours * float64(time.Hour))
-		next := time.Now().Add(interval)
+		waitStart := time.Now()
+		next := waitStart.Add(interval)
 		setNextRun(next)
 		logEvent(fmt.Sprintf("[Scheduler] Next sync scheduled for %s", next.Format("2006-01-02 15:04:05")))
 
-		// Sleep in small increments so the interval re-reads config changes.
-		deadline := time.Now().Add(interval)
-		for time.Now().Before(deadline) {
+		// Sleep in small increments so a shortened interval can take effect mid-wait.
+		for time.Now().Before(next) {
 			time.Sleep(30 * time.Second)
+			cur, _ := loadConfig()
+			curInterval := time.Duration(cur.RunIntervalHours * float64(time.Hour))
+			if curInterval > 0 && curInterval < interval {
+				interval = curInterval
+				next = waitStart.Add(curInterval)
+				setNextRun(next)
+				if time.Now().After(next) {
+					logEvent("[Scheduler] Interval shortened — running sync now")
+					break
+				}
+				logEvent(fmt.Sprintf("[Scheduler] Interval shortened — next sync now %s", next.Format("2006-01-02 15:04:05")))
+			}
 		}
 
 		runSyncJob()

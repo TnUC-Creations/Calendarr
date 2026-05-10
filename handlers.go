@@ -133,6 +133,8 @@ type DashboardData struct {
 	Deleted        int
 	SyncProgress   string
 	Config         Config
+	TheaterSuffix  string
+	DigitalSuffix  string
 }
 
 type HistoryData struct {
@@ -279,6 +281,8 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Deleted:        s.LastRunStats.Deleted,
 		SyncProgress:   s.SyncProgress,
 		Config:         cfg,
+		TheaterSuffix:  templateSuffix(cfg.MovieTheaterTemplate),
+		DigitalSuffix:  templateSuffix(cfg.MovieDigitalTemplate),
 	}
 	render(w, "dashboard", data)
 }
@@ -642,16 +646,21 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var cfg Config
+	cfg := defaultConfig()
 	if err := json.Unmarshal(configBytes, &cfg); err != nil {
 		setFlash(w, "danger", "Invalid config.json in backup.")
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
 	}
-	cfg.IgnoredShowsFile = sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)
+	normalizeLoadedConfig(&cfg)
 	hasCalendar := strings.TrimSpace(cfg.CalendarID) != "" || len(cfg.CalendarTargets) > 0
 	if cfg.RadarrAPIKey == "" && cfg.SonarrAPIKey == "" && !hasCalendar {
 		setFlash(w, "danger", "Invalid backup — missing required fields.")
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+	if cfg.WebBindAddress == "0.0.0.0" && strings.TrimSpace(cfg.WebUIPasswordHash) == "" {
+		setFlash(w, "danger", "Backup would enable LAN access without a Web UI password — refusing to restore.")
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
 	}
@@ -676,7 +685,6 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	normalizeCalendarTargets(&cfg)
 	if err := saveConfig(cfg); err != nil {
 		setFlash(w, "danger", "Could not save restored config: "+err.Error())
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)

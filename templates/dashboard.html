@@ -199,8 +199,8 @@
             <div class="modal-body" style="font-size:0.92rem;">
                 <p>This will delete <strong><span id="cleanup-mode-desc">past</span></strong> calendar events that match Calendarr naming patterns:</p>
                 <ul>
-                    <li>Events ending in <code>Theater Release</code></li>
-                    <li>Events ending in <code>Digital Release</code></li>
+                    <li>Movie events ending in <code>{{.TheaterSuffix}}</code></li>
+                    <li>Movie events ending in <code>{{.DigitalSuffix}}</code></li>
                     <li>Episode events matching <code>S##E##</code></li>
                 </ul>
                 <p id="cleanup-all-warning" class="text-warning d-none mb-2" style="font-size:0.88rem;">
@@ -559,10 +559,7 @@ function runCleanup() {
         .then(data => {
             modalBtn.disabled = false;
             modalBtn.innerHTML = '<i class="bi bi-trash3"></i> Delete Events';
-            if (multiTarget && data.ok) {
-                setCleanupIdle(trigger);
-                showPageAlert('success', `Done. Scanned ${data.scanned.toLocaleString()} events, deleted ${data.deleted.toLocaleString()}.`);
-            } else if (data.started) {
+            if (data.started) {
                 pollCleanup();
             } else {
                 setCleanupIdle(trigger);

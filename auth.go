@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -100,25 +101,43 @@ func googleOAuthCredentialsFromFile(path string) (string, string, bool) {
 
 // ---- CSRF state -------------------------------------------------------------
 
+const oauthStateTTL = 10 * time.Minute
+
 var (
-	oauthStateToken string
-	oauthStateMu    sync.Mutex
+	oauthStates   = map[string]time.Time{}
+	oauthStatesMu sync.Mutex
 )
 
-func newOAuthState() string {
+func newOAuthState() (string, error) {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
 	state := hex.EncodeToString(b)
-	oauthStateMu.Lock()
-	oauthStateToken = state
-	oauthStateMu.Unlock()
-	return state
+	oauthStatesMu.Lock()
+	defer oauthStatesMu.Unlock()
+	now := time.Now()
+	for s, exp := range oauthStates {
+		if now.After(exp) {
+			delete(oauthStates, s)
+		}
+	}
+	oauthStates[state] = now.Add(oauthStateTTL)
+	return state, nil
 }
 
-func checkOAuthState(state string) bool {
-	oauthStateMu.Lock()
-	defer oauthStateMu.Unlock()
-	return state != "" && state == oauthStateToken
+func consumeOAuthState(state string) bool {
+	if state == "" {
+		return false
+	}
+	oauthStatesMu.Lock()
+	defer oauthStatesMu.Unlock()
+	exp, ok := oauthStates[state]
+	if !ok {
+		return false
+	}
+	delete(oauthStates, state)
+	return time.Now().Before(exp)
 }
 
 // ---- Handlers ---------------------------------------------------------------
@@ -137,7 +156,12 @@ func callbackURI() string {
 
 // handleOAuthStart redirects the browser to Google's consent screen.
 func handleOAuthStart(w http.ResponseWriter, r *http.Request) {
-	state := newOAuthState()
+	state, err := newOAuthState()
+	if err != nil {
+		setFlash(w, "danger", "Could not start Google authorization: "+err.Error())
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
 	authURL := oauthConfig(callbackURI()).AuthCodeURL(state,
 		oauth2.AccessTypeOffline,
 		oauth2.ApprovalForce,
@@ -154,7 +178,7 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !checkOAuthState(r.URL.Query().Get("state")) {
+	if !consumeOAuthState(r.URL.Query().Get("state")) {
 		setFlash(w, "danger", "Invalid OAuth state — please try connecting again.")
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return

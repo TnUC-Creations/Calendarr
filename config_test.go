@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestDefaultConfigReleaseOffsetsAndRadarrTracking(t *testing.T) {
 	cfg := defaultConfig()
@@ -177,4 +180,32 @@ func targetIDs(targets []CalendarTarget) []string {
 		ids[i] = target.ID
 	}
 	return ids
+}
+
+// Restoring a backup that omits default-true booleans must preserve those
+// defaults, matching loadConfig() behavior. handleRestore unmarshals onto a
+// defaultConfig() base for this reason.
+func TestRestoreBaseUnmarshalPreservesDefaultTrueBooleans(t *testing.T) {
+	partial := []byte(`{"radarr_api_key":"k","sonarr_api_key":"k","calendar_id":"primary"}`)
+
+	cfg := defaultConfig()
+	if err := json.Unmarshal(partial, &cfg); err != nil {
+		t.Fatalf("unmarshal onto defaults failed: %v", err)
+	}
+	normalizeLoadedConfig(&cfg)
+
+	checks := map[string]bool{
+		"UseRadarr":          cfg.UseRadarr,
+		"UseSonarr":          cfg.UseSonarr,
+		"RadarrTrackTheater": cfg.RadarrTrackTheater,
+		"RadarrTrackDigital": cfg.RadarrTrackDigital,
+		"UsePushover":        cfg.UsePushover,
+		"PushoverOnAdded":    cfg.PushoverOnAdded,
+		"PushoverOnUpdated":  cfg.PushoverOnUpdated,
+	}
+	for name, got := range checks {
+		if !got {
+			t.Errorf("%s = false after restore-style unmarshal, want true", name)
+		}
+	}
 }

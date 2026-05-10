@@ -303,18 +303,26 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
-	cfg, _ := loadConfig()
-	deletedMessages, scanned, deleted, err := cleanupTargetCalendar(cfg, body.CalendarID, body.Mode, body.Sources)
-	if err != nil {
-		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error(), "scanned": scanned, "deleted": deleted})
+
+	cs := getCleanupState()
+	if cs.Running {
+		jsonOK(w, map[string]interface{}{"ok": false, "message": "Cleanup already in progress."})
 		return
 	}
-	jsonOK(w, map[string]interface{}{
-		"ok":      true,
-		"scanned": scanned,
-		"deleted": deleted,
-		"events":  deletedMessages,
+	setCleanupRunning()
+	cfg, _ := loadConfig()
+	calendarID := body.CalendarID
+	mode := body.Mode
+	sources := body.Sources
+	safeGo(func() {
+		_, scanned, deleted, err := cleanupTargetCalendar(cfg, calendarID, mode, sources)
+		if err != nil {
+			finishCleanup(false, scanned, deleted, err.Error())
+			return
+		}
+		finishCleanup(true, scanned, deleted, fmt.Sprintf("Done. Scanned %d events, deleted %d.", scanned, deleted))
 	})
+	jsonOK(w, map[string]interface{}{"ok": true, "started": true})
 }
 
 func apiCalendarTargetsSave(w http.ResponseWriter, r *http.Request) {

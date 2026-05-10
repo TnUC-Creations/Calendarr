@@ -200,17 +200,11 @@ func calendarTargetsForSource(targets []CalendarTarget, source string) []Calenda
 	return filtered
 }
 
-// loadConfig reads config.json on top of defaults so missing bool keys stay true.
-func loadConfig() (Config, error) {
-	cfg := defaultConfig()
-	data, err := os.ReadFile(dataPath(configFile))
-	if err != nil {
-		return cfg, err
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return cfg, err
-	}
-	// Guard against zero values that would break the scheduler or web server.
+// normalizeLoadedConfig clamps zero / out-of-range values and applies the
+// same defaults that loadConfig would apply on a fresh read. Used both by
+// loadConfig and by handleRestore so a restored backup is shaped exactly
+// like a freshly-loaded config.
+func normalizeLoadedConfig(cfg *Config) {
 	if cfg.RunIntervalHours <= 0 {
 		cfg.RunIntervalHours = 6
 	}
@@ -234,7 +228,20 @@ func loadConfig() (Config, error) {
 	if cfg.MaxHistoryEntries <= 0 {
 		cfg.MaxHistoryEntries = 2000
 	}
-	normalizeCalendarTargets(&cfg)
+	normalizeCalendarTargets(cfg)
+}
+
+// loadConfig reads config.json on top of defaults so missing bool keys stay true.
+func loadConfig() (Config, error) {
+	cfg := defaultConfig()
+	data, err := os.ReadFile(dataPath(configFile))
+	if err != nil {
+		return cfg, err
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, err
+	}
+	normalizeLoadedConfig(&cfg)
 	return cfg, nil
 }
 
