@@ -565,7 +565,7 @@ func syncSteam(cfg Config, calSvc *calendar.Service, targets []CalendarTarget,
 			}
 			description += "Steam App ID: " + appID
 
-			ev := allDayCalendarEvent(summary, description, dateStr, "")
+			ev := allDayCalendarEvent(summary, description, dateStr, target.SteamColorID)
 			existing := existingIndex[summary]
 			if existing == nil {
 				msg := fmt.Sprintf("%s on %s%s", summary, dateStr, targetLabel(target, multi))
@@ -587,7 +587,7 @@ func syncSteam(cfg Config, calSvc *calendar.Service, targets []CalendarTarget,
 					added++
 					result.Added = append(result.Added, msg)
 				}
-			} else if allDayEventNeedsUpdate(existing, dateStr, "") {
+			} else if allDayEventNeedsUpdate(existing, dateStr, target.SteamColorID) {
 				msg := fmt.Sprintf("%s date changed to %s%s", summary, dateStr, targetLabel(target, multi))
 				okWrite := dryRun
 				if !dryRun {

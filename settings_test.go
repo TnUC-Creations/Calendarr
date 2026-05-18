@@ -85,6 +85,34 @@ func TestApplySettingsFormIgnoresLegacySteamAPIKey(t *testing.T) {
 	}
 }
 
+func TestApplySettingsFormPersistsSteamCalendarColor(t *testing.T) {
+	cfg := defaultConfig()
+	form := url.Values{
+		"calendar_target_id_0":          {"steam-calendar"},
+		"calendar_target_name_0":        {"Steam Calendar"},
+		"calendar_target_steam_0":       {"on"},
+		"calendar_target_steam_color_0": {"10"},
+	}
+	req := httptest.NewRequest("POST", "/api/settings/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := parseSettingsRequest(req); err != nil {
+		t.Fatalf("parseSettingsRequest: %v", err)
+	}
+
+	applySettingsForm(&cfg, req)
+
+	if len(cfg.CalendarTargets) != 1 {
+		t.Fatalf("calendar targets = %d, want 1", len(cfg.CalendarTargets))
+	}
+	target := cfg.CalendarTargets[0]
+	if !target.SteamEnabled {
+		t.Fatal("SteamEnabled = false, want true")
+	}
+	if target.SteamColorID != "10" {
+		t.Fatalf("SteamColorID = %q, want 10", target.SteamColorID)
+	}
+}
+
 func TestParseSettingsRequestParsesMultipartAutosave(t *testing.T) {
 	body := strings.NewReader("--x\r\nContent-Disposition: form-data; name=\"radarr_url\"\r\n\r\nhttp://radarr/api/v3\r\n--x--\r\n")
 	req := httptest.NewRequest("POST", "/api/settings/save", body)

@@ -111,6 +111,7 @@ type CalendarTarget struct {
 	SteamEnabled  bool   `json:"steam_enabled"`
 	RadarrColorID string `json:"radarr_color_id"`
 	SonarrColorID string `json:"sonarr_color_id"`
+	SteamColorID  string `json:"steam_color_id"`
 }
 
 func defaultConfig() Config {
@@ -149,6 +150,7 @@ func normalizeCalendarTargets(cfg *Config) {
 		t.Name = strings.TrimSpace(t.Name)
 		t.RadarrColorID = normalizeCalendarColorID(t.RadarrColorID)
 		t.SonarrColorID = normalizeCalendarColorID(t.SonarrColorID)
+		t.SteamColorID = normalizeCalendarColorID(t.SteamColorID)
 		if t.ID == "" {
 			continue
 		}

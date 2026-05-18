@@ -486,6 +486,7 @@
                                  data-target-{{$i}}-steam="{{if $t.SteamEnabled}}1{{else}}0{{end}}"
                                  data-target-{{$i}}-radarr-color="{{$t.RadarrColorID}}"
                                  data-target-{{$i}}-sonarr-color="{{$t.SonarrColorID}}"
+                                 data-target-{{$i}}-steam-color="{{$t.SteamColorID}}"
                                  {{end}}
                                  data-target-count="{{len .Config.CalendarTargets}}">
                                 <div class="text-muted" style="font-size:0.85rem;">Loading calendars...</div>
@@ -999,18 +1000,19 @@ function initialTargets() {
             steam: targetsEl.getAttribute(`data-target-${i}-steam`) === '1',
             radarrColor: targetsEl.getAttribute(`data-target-${i}-radarr-color`) || '',
             sonarrColor: targetsEl.getAttribute(`data-target-${i}-sonarr-color`) || '',
+            steamColor: targetsEl.getAttribute(`data-target-${i}-steam-color`) || '',
             originalRadarr: targetsEl.getAttribute(`data-target-${i}-radarr`) !== '0',
             originalSonarr: targetsEl.getAttribute(`data-target-${i}-sonarr`) !== '0',
             originalSteam: targetsEl.getAttribute(`data-target-${i}-steam`) === '1',
         });
     }
-    return rows.length ? rows : [{ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false }];
+    return rows.length ? rows : [{ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', steamColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false }];
 }
 
 function renderCalendarTargets(rows) {
     if (!targetsEl) return;
     rows = rows.slice(0, 5);
-    if (!rows.length) rows = [{ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false }];
+    if (!rows.length) rows = [{ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', steamColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false }];
     calendarTargetRows = rows.map(row => ({ ...row }));
     let html = '';
     rows.forEach((row, i) => {
@@ -1020,13 +1022,13 @@ function renderCalendarTargets(rows) {
             return `<option value="${escapeHtml(cal.id)}" data-name="${escapeHtml(cal.name)}" ${selected}>${escapeHtml(label)}</option>`;
         }).join('');
         html += `<div class="row g-2 align-items-center mb-2 calendar-target-row">
-            <div class="col-md-3">
+            <div class="col-md-6 col-lg-2">
                 <select class="form-select calendar-target-select" name="calendar_target_id_${i}" onchange="changeTargetCalendar(this, ${i})">
                     ${options}
                 </select>
                 <input type="hidden" name="calendar_target_name_${i}" value="${escapeHtml(row.name)}">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6 col-lg-3">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <div class="form-check form-switch mb-0">
                         <input class="form-check-input source-toggle" type="checkbox" role="switch" name="calendar_target_radarr_${i}" id="calendar_target_radarr_${i}" ${row.radarr ? 'checked' : ''} data-source="radarr" data-index="${i}" data-original="${(row.originalRadarr ?? row.radarr) ? '1' : '0'}" onchange="toggleTargetSource(this)">
@@ -1035,7 +1037,7 @@ function renderCalendarTargets(rows) {
                     ${colorSelect(`calendar_target_radarr_color_${i}`, row.radarrColor, !row.radarr, i)}
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6 col-lg-3">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <div class="form-check form-switch mb-0">
                         <input class="form-check-input source-toggle" type="checkbox" role="switch" name="calendar_target_sonarr_${i}" id="calendar_target_sonarr_${i}" ${row.sonarr ? 'checked' : ''} data-source="sonarr" data-index="${i}" data-original="${(row.originalSonarr ?? row.sonarr) ? '1' : '0'}" onchange="toggleTargetSource(this)">
@@ -1044,13 +1046,16 @@ function renderCalendarTargets(rows) {
                     ${colorSelect(`calendar_target_sonarr_color_${i}`, row.sonarrColor, !row.sonarr, i)}
                 </div>
             </div>
-            <div class="col-md-2">
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input source-toggle" type="checkbox" role="switch" name="calendar_target_steam_${i}" id="calendar_target_steam_${i}" ${row.steam ? 'checked' : ''} data-source="steam" data-index="${i}" data-original="${(row.originalSteam ?? row.steam) ? '1' : '0'}" onchange="toggleTargetSource(this)">
-                    <label class="form-check-label" for="calendar_target_steam_${i}">Steam</label>
+            <div class="col-md-6 col-lg-3">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input source-toggle" type="checkbox" role="switch" name="calendar_target_steam_${i}" id="calendar_target_steam_${i}" ${row.steam ? 'checked' : ''} data-source="steam" data-index="${i}" data-original="${(row.originalSteam ?? row.steam) ? '1' : '0'}" onchange="toggleTargetSource(this)">
+                        <label class="form-check-label" for="calendar_target_steam_${i}">Steam</label>
+                    </div>
+                    ${colorSelect(`calendar_target_steam_color_${i}`, row.steamColor, !row.steam, i)}
                 </div>
             </div>
-            <div class="col-md-1 d-flex justify-content-md-end">
+            <div class="col-md-12 col-lg-1 d-flex justify-content-md-end">
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCalendarTarget(${i})" ${rows.length === 1 ? 'disabled' : ''} title="Remove calendar target">
                     <i class="bi bi-trash"></i>
                 </button>
@@ -1083,7 +1088,7 @@ function colorSelect(name, current, disabled, index) {
         const selected = id === current ? 'selected' : '';
         return `<option value="${id}" ${selected}>${label}</option>`;
     }).join('');
-    const source = name.includes('radarr') ? 'radarr' : 'sonarr';
+    const source = name.includes('radarr') ? 'radarr' : (name.includes('sonarr') ? 'sonarr' : 'steam');
     return `<select class="form-select form-select-sm calendar-color-select" name="${name}" style="width:118px;" data-source="${source}" data-index="${index}" onchange="changeTargetColor(this)" ${disabled ? 'disabled' : ''}>${options}</select>`;
 }
 
@@ -1105,6 +1110,7 @@ function currentTargetRows() {
             steam: steamToggle.checked,
             radarrColor: row.querySelector('[name*="_radarr_color_"]').value,
             sonarrColor: row.querySelector('[name*="_sonarr_color_"]').value,
+            steamColor: row.querySelector('[name*="_steam_color_"]').value,
             originalRadarr: calendarTargetRows[i]?.originalRadarr ?? radarrToggle.dataset.original === '1',
             originalSonarr: calendarTargetRows[i]?.originalSonarr ?? sonarrToggle.dataset.original === '1',
             originalSteam: calendarTargetRows[i]?.originalSteam ?? steamToggle.dataset.original === '1',
@@ -1184,7 +1190,7 @@ if (addTargetBtn) {
         clearTargetAction();
         const rows = currentTargetRows();
         if (rows.length >= 5) return;
-        rows.push({ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false });
+        rows.push({ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', steamColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false });
         renderCalendarTargets(rows);
         saveCalendarTargets(currentTargetRows());
     });
@@ -1298,6 +1304,7 @@ function saveCalendarTargets(rows) {
         steam_enabled: !!row.steam,
         radarr_color_id: row.radarrColor || '',
         sonarr_color_id: row.sonarrColor || '',
+        steam_color_id: row.steamColor || '',
     }));
     if (targetStatusEl) targetStatusEl.textContent = 'Saving calendar targets...';
     return csrfFetch('/api/settings/calendar-targets', {
@@ -1316,6 +1323,7 @@ function saveCalendarTargets(rows) {
                 steam: !!target.steam_enabled,
                 radarrColor: target.radarr_color_id || '',
                 sonarrColor: target.sonarr_color_id || '',
+                steamColor: target.steam_color_id || '',
                 originalRadarr: !!target.radarr_enabled,
                 originalSonarr: !!target.sonarr_enabled,
                 originalSteam: !!target.steam_enabled,

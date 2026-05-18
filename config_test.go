@@ -131,7 +131,7 @@ func TestNormalizeCalendarTargetsRemovesBlankDuplicateAndCapsAtFive(t *testing.T
 func TestNormalizeCalendarTargetsKeepsValidColorsAndDropsInvalidColors(t *testing.T) {
 	cfg := Config{
 		CalendarTargets: []CalendarTarget{
-			{ID: "movies", RadarrColorID: "9", SonarrColorID: "99"},
+			{ID: "movies", RadarrColorID: "9", SonarrColorID: "99", SteamColorID: "10"},
 		},
 	}
 
@@ -143,6 +143,9 @@ func TestNormalizeCalendarTargetsKeepsValidColorsAndDropsInvalidColors(t *testin
 	}
 	if target.SonarrColorID != "" {
 		t.Fatalf("sonarr color = %q, want empty", target.SonarrColorID)
+	}
+	if target.SteamColorID != "10" {
+		t.Fatalf("steam color = %q, want 10", target.SteamColorID)
 	}
 }
 

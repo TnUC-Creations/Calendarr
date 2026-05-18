@@ -105,6 +105,23 @@ func TestSettingsTemplateDoesNotRenderSteamAPIKey(t *testing.T) {
 	}
 }
 
+func TestSettingsTemplateRendersSteamColorControl(t *testing.T) {
+	src, err := os.ReadFile("templates/settings.html")
+	if err != nil {
+		t.Fatalf("read settings template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`data-target-{{$i}}-steam-color="{{$t.SteamColorID}}"`,
+		`calendar_target_steam_color_${i}`,
+		`steam_color_id: row.steamColor`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("settings template missing Steam color wiring %q", want)
+		}
+	}
+}
+
 func TestLayoutGoogleCalendarBannerLinksToCalendarTab(t *testing.T) {
 	loadTemplates()
 	var out bytes.Buffer
@@ -125,6 +142,22 @@ func TestLayoutGoogleCalendarBannerLinksToCalendarTab(t *testing.T) {
 	}
 	if strings.Contains(html, `href="/settings#google-calendar-card"`) {
 		t.Fatal("Google Calendar banner should not link to the old card anchor")
+	}
+}
+
+func TestDashboardScheduleShowsSteamBadge(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := DashboardData{
+		PageBase: PageBase{CSRFToken: "test-token", CurrentPage: "dashboard"},
+		Config:   Config{UseSteam: true},
+	}
+	if err := pageTemplates["dashboard"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if !strings.Contains(html, `<span class="badge bg-success">Steam</span>`) {
+		t.Fatal("dashboard schedule should show a Steam badge when Steam is enabled")
 	}
 }
 

@@ -91,6 +91,9 @@
                         <span class="badge bg-primary">Sonarr</span>
                         {{end}}
                     {{end}}
+                    {{if .Config.UseSteam}}
+                        <span class="badge bg-success">Steam</span>
+                    {{end}}
                 </p>
             </div>
         </div>
@@ -214,6 +217,7 @@
                     <li>Movie events ending in <code>{{.TheaterSuffix}}</code></li>
                     <li>Movie events ending in <code>{{.DigitalSuffix}}</code></li>
                     <li>Episode events matching <code>S##E##</code></li>
+                    <li>Steam events marked with <code>Steam App ID</code></li>
                 </ul>
                 <p id="cleanup-all-warning" class="text-warning d-none mb-2" style="font-size:0.88rem;">
                     <i class="bi bi-exclamation-triangle-fill"></i> <strong>All</strong> mode removes both past and future Calendarr events.

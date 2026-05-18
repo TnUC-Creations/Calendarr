@@ -897,6 +897,20 @@ func TestSyncSteamRateLimitAbortIsPhaseWide(t *testing.T) {
 	}
 }
 
+func TestSyncSteamUsesSteamTargetColor(t *testing.T) {
+	src, err := os.ReadFile("steam.go")
+	if err != nil {
+		t.Fatalf("read steam.go: %v", err)
+	}
+	body := string(src)
+	if !strings.Contains(body, "allDayCalendarEvent(summary, description, dateStr, target.SteamColorID)") {
+		t.Fatal("syncSteam should create Steam events with target.SteamColorID")
+	}
+	if !strings.Contains(body, "allDayEventNeedsUpdate(existing, dateStr, target.SteamColorID)") {
+		t.Fatal("syncSteam should update existing Steam events when target.SteamColorID changes")
+	}
+}
+
 // ---- Steam preview progress routing -----------------------------------------
 
 // TestSyncSteamAvoidsDirectProgressStateWrites guards the preview path:

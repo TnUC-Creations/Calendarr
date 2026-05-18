@@ -431,6 +431,7 @@ func applySettingsForm(cfg *Config, r *http.Request) {
 				SteamEnabled:  r.FormValue(fmt.Sprintf("calendar_target_steam_%d", i)) != "",
 				RadarrColorID: strings.TrimSpace(r.FormValue(fmt.Sprintf("calendar_target_radarr_color_%d", i))),
 				SonarrColorID: strings.TrimSpace(r.FormValue(fmt.Sprintf("calendar_target_sonarr_color_%d", i))),
+				SteamColorID:  strings.TrimSpace(r.FormValue(fmt.Sprintf("calendar_target_steam_color_%d", i))),
 			})
 		}
 	}
