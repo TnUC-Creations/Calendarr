@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -71,6 +72,58 @@ func TestAPITestPushoverRejectsMissingFields(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 	assertJSONFailure(t, rec.Body.String())
+}
+
+func TestSettingsTestFailureLogRedactsSecretsAndURLs(t *testing.T) {
+	oldDataDir := dataDir
+	dataDir = t.TempDir()
+	t.Cleanup(func() { dataDir = oldDataDir })
+	if err := os.MkdirAll(dataPath(logsDir), 0755); err != nil {
+		t.Fatalf("mkdir logs: %v", err)
+	}
+
+	secret := "GOCSPX-" + strings.Repeat("A", 32)
+	logSettingsTestFailure("Steam", "wishlist parse failed at https://example.com/path?token="+secret+" body token="+secret)
+
+	data, err := os.ReadFile(currentLogFile())
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	logText := string(data)
+	if !strings.Contains(logText, "[Settings Test] Steam failure") {
+		t.Fatalf("log = %q, want settings test failure", logText)
+	}
+	if strings.Contains(logText, secret) || strings.Contains(logText, "https://example.com/path") {
+		t.Fatalf("log leaked secret or full URL: %q", logText)
+	}
+	if !strings.Contains(logText, "[redacted]") || !strings.Contains(logText, "[url]") {
+		t.Fatalf("log = %q, want redaction markers", logText)
+	}
+}
+
+func TestUpcomingEventKindIncludesSteamEvents(t *testing.T) {
+	cfg := defaultConfig()
+
+	tests := []struct {
+		name        string
+		summary     string
+		description string
+		want        string
+	}{
+		{name: "theater", summary: "Movie Theater Release", want: "theater"},
+		{name: "digital", summary: "Movie Digital Release", want: "digital"},
+		{name: "episode", summary: "Show S01E02", want: "episode"},
+		{name: "steam", summary: "Game - Steam Release", description: "Steam App ID: 12345", want: "steam"},
+		{name: "steam shaped personal event", summary: "Game - Steam Release", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := upcomingEventKind(tt.summary, tt.description, cfg); got != tt.want {
+				t.Fatalf("upcomingEventKind(%q, %q) = %q, want %q", tt.summary, tt.description, got, tt.want)
+			}
+		})
+	}
 }
 
 func assertJSONFailure(t *testing.T, body string) {

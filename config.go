@@ -56,6 +56,12 @@ type Config struct {
 	SonarrURL    string `json:"sonarr_url"`
 	SonarrAPIKey string `json:"sonarr_api_key"`
 
+	UseSteam      bool   `json:"use_steam"`
+	SteamID       string `json:"steam_id"`
+	SteamAPIKey   string `json:"steam_api_key,omitempty"`
+	SteamTemplate string `json:"steam_template"`
+	SteamMaxGames int    `json:"steam_max_games"`
+
 	RadarrTheaterDayOffset int  `json:"radarr_theater_day_offset"`
 	RadarrDigitalDayOffset int  `json:"radarr_digital_day_offset"`
 	SonarrDayOffset        int  `json:"sonarr_day_offset"`
@@ -102,6 +108,7 @@ type CalendarTarget struct {
 	Name          string `json:"name"`
 	RadarrEnabled bool   `json:"radarr_enabled"`
 	SonarrEnabled bool   `json:"sonarr_enabled"`
+	SteamEnabled  bool   `json:"steam_enabled"`
 	RadarrColorID string `json:"radarr_color_id"`
 	SonarrColorID string `json:"sonarr_color_id"`
 }
@@ -127,6 +134,8 @@ func defaultConfig() Config {
 		MovieTheaterTemplate: "{title} Theater Release",
 		MovieDigitalTemplate: "{title} Digital Release",
 		EpisodeTemplate:      "{title} S{season:02d}E{episode:02d}",
+		SteamTemplate:        "{title} - Steam Release",
+		SteamMaxGames:        500,
 		MaxLogFiles:          30,
 		MaxHistoryEntries:    2000,
 	}
@@ -162,7 +171,20 @@ func normalizeCalendarTargets(cfg *Config) {
 			ID:            id,
 			RadarrEnabled: cfg.UseRadarr,
 			SonarrEnabled: cfg.UseSonarr,
+			SteamEnabled:  cfg.UseSteam,
 		})
+	}
+	if cfg.UseSteam {
+		hasSteamTarget := false
+		for _, target := range targets {
+			if target.SteamEnabled {
+				hasSteamTarget = true
+				break
+			}
+		}
+		if !hasSteamTarget {
+			targets[0].SteamEnabled = true
+		}
 	}
 	cfg.CalendarTargets = targets
 	cfg.CalendarID = targets[0].ID
@@ -193,6 +215,10 @@ func calendarTargetsForSource(targets []CalendarTarget, source string) []Calenda
 			}
 		case "sonarr":
 			if target.SonarrEnabled {
+				filtered = append(filtered, target)
+			}
+		case "steam":
+			if target.SteamEnabled {
 				filtered = append(filtered, target)
 			}
 		}
@@ -228,6 +254,14 @@ func normalizeLoadedConfig(cfg *Config) {
 	if cfg.MaxHistoryEntries <= 0 {
 		cfg.MaxHistoryEntries = 2000
 	}
+	if cfg.SteamTemplate == "" {
+		cfg.SteamTemplate = "{title} - Steam Release"
+	}
+	if cfg.SteamMaxGames <= 0 || cfg.SteamMaxGames > 500 {
+		cfg.SteamMaxGames = 500
+	}
+	cfg.SteamID = strings.TrimSpace(cfg.SteamID)
+	cfg.SteamAPIKey = ""
 	normalizeCalendarTargets(cfg)
 }
 
@@ -257,6 +291,7 @@ func saveConfig(cfg Config) error {
 func saveConfigLocked(cfg Config) error {
 	cfg.WebBindAddress = normalizeWebBindAddress(cfg.WebBindAddress)
 	cfg.IgnoredShowsFile = sanitizedIgnoredShowsFile(cfg.IgnoredShowsFile)
+	cfg.SteamAPIKey = ""
 	normalizeCalendarTargets(&cfg)
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

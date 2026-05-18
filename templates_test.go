@@ -81,6 +81,30 @@ func TestSettingsTemplateAllowsLANAccessWithPassword(t *testing.T) {
 	}
 }
 
+func TestSettingsTemplateDoesNotRenderSteamAPIKey(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := SettingsData{
+		PageBase: PageBase{
+			CSRFToken:   "test-token",
+			CurrentPage: "settings",
+		},
+		Config: Config{SteamAPIKey: "legacy-key"},
+	}
+	if err := pageTemplates["settings"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	for _, blocked := range []string{`name="steam_api_key"`, `Steam API Key`, `legacy-key`, `steamcommunity.com/id/`} {
+		if strings.Contains(html, blocked) {
+			t.Fatalf("settings template exposed unsupported Steam API key or vanity URL text %q", blocked)
+		}
+	}
+	if !strings.Contains(html, `steamcommunity.com/profiles/`) {
+		t.Fatal("settings template should point users to /profiles/<Steam64> URLs")
+	}
+}
+
 func TestLayoutGoogleCalendarBannerLinksToCalendarTab(t *testing.T) {
 	loadTemplates()
 	var out bytes.Buffer

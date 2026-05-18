@@ -19,7 +19,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.10.1"
+	appVersion = "1.11.0"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -155,6 +155,18 @@ func syncWorker() {
 		if cleanupErr != nil {
 			status = fmt.Sprintf("Error: %v", cleanupErr)
 			fmt.Fprintf(w, "[ERROR] Auto-cleanup failed: %v\n", cleanupErr)
+		}
+	}
+
+	// Steam config-level error (non-fatal but should alert the user).
+	if result.SteamConfigError != "" {
+		if cfg.UsePushover && cfg.PushoverOnError && cfg.PushoverToken != "" && cfg.PushoverUser != "" {
+			msg := fmt.Sprintf("[Steam] Config error: %s", result.SteamConfigError)
+			fmt.Fprintf(w, "[Pushover] Steam config error notification: ENABLED — sending\n")
+			sendPushover(cfg.PushoverToken, cfg.PushoverUser, msg, cfg.PushoverSound)
+		}
+		if status == "Success" {
+			status = fmt.Sprintf("Success (Steam warning: %s)", result.SteamConfigError)
 		}
 	}
 	finishRun(runTime, status, changes, stats)
@@ -305,6 +317,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/upcoming", apiUpcoming)
 	mux.HandleFunc("/api/test/radarr", apiTestRadarr)
 	mux.HandleFunc("/api/test/sonarr", apiTestSonarr)
+	mux.HandleFunc("/api/test/steam", apiTestSteam)
 	mux.HandleFunc("/api/test/pushover", apiTestPushover)
 	mux.HandleFunc("/api/test/calendar", apiTestCalendar)
 	mux.HandleFunc("/api/stop", apiStop)

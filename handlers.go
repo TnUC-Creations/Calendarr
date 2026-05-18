@@ -393,6 +393,7 @@ func parseSettingsRequest(r *http.Request) error {
 func applySettingsForm(cfg *Config, r *http.Request) {
 	cfg.UseRadarr = r.FormValue("use_radarr") != ""
 	cfg.UseSonarr = r.FormValue("use_sonarr") != ""
+	cfg.UseSteam = r.FormValue("use_steam") != ""
 	cfg.UsePushover = r.FormValue("use_pushover") != ""
 	cfg.PushoverSound = r.FormValue("pushover_sound")
 	cfg.PushoverOnAdded = r.FormValue("pushover_on_added") != ""
@@ -407,6 +408,9 @@ func applySettingsForm(cfg *Config, r *http.Request) {
 	cfg.RadarrAPIKey = strings.TrimSpace(r.FormValue("radarr_api_key"))
 	cfg.SonarrURL = strings.TrimSpace(r.FormValue("sonarr_url"))
 	cfg.SonarrAPIKey = strings.TrimSpace(r.FormValue("sonarr_api_key"))
+	cfg.SteamID = strings.TrimSpace(r.FormValue("steam_id"))
+	cfg.SteamAPIKey = ""
+	cfg.SteamTemplate = strings.TrimSpace(r.FormValue("steam_template"))
 	cfg.RadarrTrackTheater = r.FormValue("radarr_track_theater") != ""
 	cfg.RadarrTrackDigital = r.FormValue("radarr_track_digital") != ""
 	cfg.PushoverToken = strings.TrimSpace(r.FormValue("pushover_app_token"))
@@ -424,6 +428,7 @@ func applySettingsForm(cfg *Config, r *http.Request) {
 				Name:          strings.TrimSpace(r.FormValue(fmt.Sprintf("calendar_target_name_%d", i))),
 				RadarrEnabled: r.FormValue(fmt.Sprintf("calendar_target_radarr_%d", i)) != "",
 				SonarrEnabled: r.FormValue(fmt.Sprintf("calendar_target_sonarr_%d", i)) != "",
+				SteamEnabled:  r.FormValue(fmt.Sprintf("calendar_target_steam_%d", i)) != "",
 				RadarrColorID: strings.TrimSpace(r.FormValue(fmt.Sprintf("calendar_target_radarr_color_%d", i))),
 				SonarrColorID: strings.TrimSpace(r.FormValue(fmt.Sprintf("calendar_target_sonarr_color_%d", i))),
 			})

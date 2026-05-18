@@ -323,9 +323,10 @@ func getCalService(cfg Config) (*calendar.Service, error) {
 
 // SyncResult holds the categorised change messages from a sync run.
 type SyncResult struct {
-	Added   []string
-	Updated []string
-	Deleted []string
+	Added            []string
+	Updated          []string
+	Deleted          []string
+	SteamConfigError string
 }
 
 const (
@@ -586,7 +587,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 				return result, err
 			}
 			var movies []map[string]interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&movies); err != nil {
+			if err := json.NewDecoder(io.LimitReader(resp.Body, 50<<20)).Decode(&movies); err != nil {
 				fmt.Fprintf(w, "[ERROR] Failed to parse Radarr response: %v\n", err)
 				resp.Body.Close()
 				return result, err
@@ -780,7 +781,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 				return result, err
 			}
 			var shows []map[string]interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&shows); err != nil {
+			if err := json.NewDecoder(io.LimitReader(resp.Body, 50<<20)).Decode(&shows); err != nil {
 				fmt.Fprintf(w, "[ERROR] Failed to parse Sonarr series response: %v\n", err)
 				resp.Body.Close()
 				return result, err
@@ -809,7 +810,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 				fmt.Fprintf(w, "[ERROR] %v\n", err)
 				return result, err
 			}
-			if decErr := json.NewDecoder(epResp.Body).Decode(&allEpisodes); decErr != nil {
+			if decErr := json.NewDecoder(io.LimitReader(epResp.Body, 10<<20)).Decode(&allEpisodes); decErr != nil {
 				fmt.Fprintf(w, "[ERROR] Failed to parse Sonarr episode response: %v\n", decErr)
 				epResp.Body.Close()
 				return result, decErr
@@ -946,6 +947,26 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		}
 	}
 
+	// ---- Steam -----------------------------------------------------------------
+	if cfg.UseSteam {
+		steamStart := time.Now()
+		fmt.Fprintf(w, "[Sync] Starting Steam phase...\n")
+		progress("Fetching Steam wishlist...")
+		steamTargets := calendarTargetsForSource(targets, "steam")
+		if len(steamTargets) == 0 {
+			fmt.Fprintf(w, "[Steam] No calendar targets have Steam enabled\n")
+		} else {
+			configErr, steamErr := syncSteam(cfg, calSvc, steamTargets, &result, w, dryRun, progress)
+			if steamErr != nil {
+				fmt.Fprintf(w, "[Steam] Phase error: %v\n", steamErr)
+				if configErr {
+					result.SteamConfigError = steamErr.Error()
+				}
+			}
+			fmt.Fprintf(w, "[Steam] Phase complete in %s\n", time.Since(steamStart).Round(time.Millisecond))
+		}
+	}
+
 	// Cleanup: remove calendar events for all currently ignored shows.
 	// This is the only cleanup pass — there is no separate "newly ignored" pre-pass,
 	// which previously caused double-deletions when Google Calendar returned recently
@@ -1015,7 +1036,7 @@ func fetchSonarrShows(cfg Config) ([]SonarrShowInfo, error) {
 	}
 	defer resp.Body.Close()
 	var raw []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 50<<20)).Decode(&raw); err != nil {
 		return nil, err
 	}
 	shows := make([]SonarrShowInfo, 0, len(raw))

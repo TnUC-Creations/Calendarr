@@ -325,6 +325,52 @@
                     </div>
                 </div>
 
+                <!-- Steam -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                            <span><i class="bi bi-controller"></i> Steam Wishlist</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="steam-result" class="badge d-none"></span>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="testConn('steam',this)">
+                                    <i class="bi bi-activity"></i> Test</button>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           name="use_steam" id="use_steam" {{if .Config.UseSteam}}checked{{end}}>
+                                    <label class="form-check-label" for="use_steam">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Steam ID or Profile URL
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Steam ID"
+                                            data-bs-content="Enter your public 17-digit Steam64 ID (starts with 7656) or your Steam community /profiles/ URL. Vanity /id/ URLs are not supported.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="text" class="form-control" name="steam_id"
+                                           value="{{.Config.SteamID}}"
+                                           placeholder="76561198000000000 or steamcommunity.com/profiles/76561198000000000">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Event Title Template
+                                        <button type="button" class="help-btn" data-bs-toggle="popover"
+                                            data-bs-placement="right" data-bs-title="Event Title Template"
+                                            data-bs-content="Use {title} for the game name. Example: '{title} - Steam Release' becomes 'Half-Life 3 - Steam Release'.">
+                                            <i class="bi bi-question-circle"></i></button>
+                                    </label>
+                                    <input type="text" class="form-control font-monospace" name="steam_template"
+                                           value="{{.Config.SteamTemplate}}"
+                                           placeholder="{title} - Steam Release">
+                                    <div class="form-text">Variables: <code>{title}</code></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Event Naming Templates -->
                 <div class="col-12">
                     <div class="card">
@@ -437,6 +483,7 @@
                                  data-target-{{$i}}-name="{{$t.Name}}"
                                  data-target-{{$i}}-radarr="{{if $t.RadarrEnabled}}1{{else}}0{{end}}"
                                  data-target-{{$i}}-sonarr="{{if $t.SonarrEnabled}}1{{else}}0{{end}}"
+                                 data-target-{{$i}}-steam="{{if $t.SteamEnabled}}1{{else}}0{{end}}"
                                  data-target-{{$i}}-radarr-color="{{$t.RadarrColorID}}"
                                  data-target-{{$i}}-sonarr-color="{{$t.SonarrColorID}}"
                                  {{end}}
@@ -774,6 +821,7 @@ function toggleSecret(btn) {
 const TEST_FIELDS = {
     radarr:   ['radarr_url', 'radarr_api_key'],
     sonarr:   ['sonarr_url', 'sonarr_api_key'],
+    steam:    ['steam_id'],
     pushover: ['pushover_app_token', 'pushover_user_key'],
     calendar: [],
 };
@@ -948,19 +996,21 @@ function initialTargets() {
             name: targetsEl.getAttribute(`data-target-${i}-name`) || '',
             radarr: targetsEl.getAttribute(`data-target-${i}-radarr`) !== '0',
             sonarr: targetsEl.getAttribute(`data-target-${i}-sonarr`) !== '0',
+            steam: targetsEl.getAttribute(`data-target-${i}-steam`) === '1',
             radarrColor: targetsEl.getAttribute(`data-target-${i}-radarr-color`) || '',
             sonarrColor: targetsEl.getAttribute(`data-target-${i}-sonarr-color`) || '',
             originalRadarr: targetsEl.getAttribute(`data-target-${i}-radarr`) !== '0',
             originalSonarr: targetsEl.getAttribute(`data-target-${i}-sonarr`) !== '0',
+            originalSteam: targetsEl.getAttribute(`data-target-${i}-steam`) === '1',
         });
     }
-    return rows.length ? rows : [{ id: '', name: '', radarr: true, sonarr: true, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false }];
+    return rows.length ? rows : [{ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false }];
 }
 
 function renderCalendarTargets(rows) {
     if (!targetsEl) return;
     rows = rows.slice(0, 5);
-    if (!rows.length) rows = [{ id: '', name: '', radarr: true, sonarr: true, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false }];
+    if (!rows.length) rows = [{ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false }];
     calendarTargetRows = rows.map(row => ({ ...row }));
     let html = '';
     rows.forEach((row, i) => {
@@ -970,7 +1020,7 @@ function renderCalendarTargets(rows) {
             return `<option value="${escapeHtml(cal.id)}" data-name="${escapeHtml(cal.name)}" ${selected}>${escapeHtml(label)}</option>`;
         }).join('');
         html += `<div class="row g-2 align-items-center mb-2 calendar-target-row">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <select class="form-select calendar-target-select" name="calendar_target_id_${i}" onchange="changeTargetCalendar(this, ${i})">
                     ${options}
                 </select>
@@ -994,7 +1044,13 @@ function renderCalendarTargets(rows) {
                     ${colorSelect(`calendar_target_sonarr_color_${i}`, row.sonarrColor, !row.sonarr, i)}
                 </div>
             </div>
-            <div class="col-md-2 d-flex justify-content-md-end">
+            <div class="col-md-2">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input source-toggle" type="checkbox" role="switch" name="calendar_target_steam_${i}" id="calendar_target_steam_${i}" ${row.steam ? 'checked' : ''} data-source="steam" data-index="${i}" data-original="${(row.originalSteam ?? row.steam) ? '1' : '0'}" onchange="toggleTargetSource(this)">
+                    <label class="form-check-label" for="calendar_target_steam_${i}">Steam</label>
+                </div>
+            </div>
+            <div class="col-md-1 d-flex justify-content-md-end">
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCalendarTarget(${i})" ${rows.length === 1 ? 'disabled' : ''} title="Remove calendar target">
                     <i class="bi bi-trash"></i>
                 </button>
@@ -1038,15 +1094,20 @@ function escapeHtml(s) {
 function currentTargetRows() {
     return Array.from(document.querySelectorAll('.calendar-target-row')).map((row, i) => {
         const select = row.querySelector('select');
+        const radarrToggle = row.querySelector('input[data-source="radarr"]');
+        const sonarrToggle = row.querySelector('input[data-source="sonarr"]');
+        const steamToggle = row.querySelector('input[data-source="steam"]');
         return {
             id: select.value,
             name: row.querySelector('input[type="hidden"]').value,
-            radarr: row.querySelector('[name*="_radarr_"]').checked,
-            sonarr: row.querySelector('[name*="_sonarr_"]').checked,
+            radarr: radarrToggle.checked,
+            sonarr: sonarrToggle.checked,
+            steam: steamToggle.checked,
             radarrColor: row.querySelector('[name*="_radarr_color_"]').value,
             sonarrColor: row.querySelector('[name*="_sonarr_color_"]').value,
-            originalRadarr: calendarTargetRows[i]?.originalRadarr ?? row.querySelector('[name*="_radarr_"]').dataset.original === '1',
-            originalSonarr: calendarTargetRows[i]?.originalSonarr ?? row.querySelector('[name*="_sonarr_"]').dataset.original === '1',
+            originalRadarr: calendarTargetRows[i]?.originalRadarr ?? radarrToggle.dataset.original === '1',
+            originalSonarr: calendarTargetRows[i]?.originalSonarr ?? sonarrToggle.dataset.original === '1',
+            originalSteam: calendarTargetRows[i]?.originalSteam ?? steamToggle.dataset.original === '1',
         };
     });
 }
@@ -1058,7 +1119,10 @@ function toggleTargetSource(toggle) {
     const rowState = rows[index];
     if (!rowState) return;
     const source = toggle.dataset.source;
-    const wasEnabled = source === 'radarr' ? calendarTargetRows[index]?.originalRadarr : calendarTargetRows[index]?.originalSonarr;
+    let wasEnabled = false;
+    if (source === 'radarr') wasEnabled = calendarTargetRows[index]?.originalRadarr;
+    else if (source === 'sonarr') wasEnabled = calendarTargetRows[index]?.originalSonarr;
+    else if (source === 'steam') wasEnabled = calendarTargetRows[index]?.originalSteam;
     const wrap = toggle.closest('.d-flex');
     const select = wrap ? wrap.querySelector('.calendar-color-select') : null;
     if (select) select.disabled = !toggle.checked;
@@ -1109,7 +1173,7 @@ function removeCalendarTarget(index) {
         kind: 'delete-target',
         index,
         calendarID: row.id,
-        sources: ['radarr', 'sonarr'],
+        sources: ['radarr', 'sonarr', 'steam'],
         message: `Remove ${row.name || row.id || 'this calendar'}? All Calendarr-managed events on that Google calendar will be deleted.`,
     });
 }
@@ -1120,7 +1184,7 @@ if (addTargetBtn) {
         clearTargetAction();
         const rows = currentTargetRows();
         if (rows.length >= 5) return;
-        rows.push({ id: '', name: '', radarr: true, sonarr: true, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false });
+        rows.push({ id: '', name: '', radarr: true, sonarr: true, steam: false, radarrColor: '', sonarrColor: '', originalRadarr: false, originalSonarr: false, originalSteam: false });
         renderCalendarTargets(rows);
         saveCalendarTargets(currentTargetRows());
     });
@@ -1129,6 +1193,7 @@ if (addTargetBtn) {
 function sourceLabel(source) {
     if (source === 'radarr') return 'Radarr';
     if (source === 'sonarr') return 'Sonarr';
+    if (source === 'steam') return 'Steam';
     return 'Calendarr';
 }
 
@@ -1230,6 +1295,7 @@ function saveCalendarTargets(rows) {
         name: row.name,
         radarr_enabled: !!row.radarr,
         sonarr_enabled: !!row.sonarr,
+        steam_enabled: !!row.steam,
         radarr_color_id: row.radarrColor || '',
         sonarr_color_id: row.sonarrColor || '',
     }));
@@ -1247,10 +1313,12 @@ function saveCalendarTargets(rows) {
                 name: target.name,
                 radarr: !!target.radarr_enabled,
                 sonarr: !!target.sonarr_enabled,
+                steam: !!target.steam_enabled,
                 radarrColor: target.radarr_color_id || '',
                 sonarrColor: target.sonarr_color_id || '',
                 originalRadarr: !!target.radarr_enabled,
                 originalSonarr: !!target.sonarr_enabled,
+                originalSteam: !!target.steam_enabled,
             }));
             if (targetStatusEl) targetStatusEl.textContent = 'Calendar targets saved.';
             return data;

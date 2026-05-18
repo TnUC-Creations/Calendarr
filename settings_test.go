@@ -62,6 +62,29 @@ func TestApplySettingsFormPersistsPushoverUpdateAvailable(t *testing.T) {
 	}
 }
 
+func TestApplySettingsFormIgnoresLegacySteamAPIKey(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SteamAPIKey = "old-key"
+	form := url.Values{
+		"steam_id":      {"76561198000000001"},
+		"steam_api_key": {"submitted-key"},
+	}
+	req := httptest.NewRequest("POST", "/api/settings/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := parseSettingsRequest(req); err != nil {
+		t.Fatalf("parseSettingsRequest: %v", err)
+	}
+
+	applySettingsForm(&cfg, req)
+
+	if cfg.SteamAPIKey != "" {
+		t.Fatalf("SteamAPIKey = %q, want ignored and cleared", cfg.SteamAPIKey)
+	}
+	if cfg.SteamID != "76561198000000001" {
+		t.Fatalf("SteamID = %q, want submitted Steam64 ID", cfg.SteamID)
+	}
+}
+
 func TestParseSettingsRequestParsesMultipartAutosave(t *testing.T) {
 	body := strings.NewReader("--x\r\nContent-Disposition: form-data; name=\"radarr_url\"\r\n\r\nhttp://radarr/api/v3\r\n--x--\r\n")
 	req := httptest.NewRequest("POST", "/api/settings/save", body)

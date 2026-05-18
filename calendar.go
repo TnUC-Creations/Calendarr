@@ -45,8 +45,8 @@ func separator() string {
 	return sep
 }
 
-func cleanupEventSource(summary string, cfg Config) string {
-	source := cleanupEventKind(summary, cfg)
+func cleanupEventSource(summary, description string, cfg Config) string {
+	source := cleanupEventKindForEvent(summary, description, cfg)
 	switch source {
 	case "radarr_theater", "radarr_digital":
 		return "radarr"
@@ -56,8 +56,16 @@ func cleanupEventSource(summary string, cfg Config) string {
 }
 
 func cleanupEventKind(summary string, cfg Config) string {
+	return cleanupEventKindForEvent(summary, "", cfg)
+}
+
+func cleanupEventKindForEvent(summary, description string, cfg Config) string {
 	if summary == "" {
 		return ""
+	}
+	steamSuffix := templateSuffix(cfg.SteamTemplate)
+	if steamSuffix != "" && hasSuffix(summary, steamSuffix) && steamEventDescription(description) {
+		return "steam"
 	}
 	theaterSuffix := templateSuffix(cfg.MovieTheaterTemplate)
 	digitalSuffix := templateSuffix(cfg.MovieDigitalTemplate)
@@ -81,11 +89,14 @@ func sourceSet(sources []string) map[string]struct{} {
 			set["radarr"] = struct{}{}
 		case "sonarr":
 			set["sonarr"] = struct{}{}
+		case "steam":
+			set["steam"] = struct{}{}
 		}
 	}
 	if len(set) == 0 {
 		set["radarr"] = struct{}{}
 		set["sonarr"] = struct{}{}
+		set["steam"] = struct{}{}
 	}
 	return set
 }
@@ -186,7 +197,7 @@ func runCleanup(cfg Config, mode string) ([]string, error) {
 				if s == "" {
 					continue
 				}
-				if cleanupEventSource(s, cfg) != "" {
+				if cleanupEventSource(s, ev.Description, cfg) != "" {
 					if err := calSvc.Events.Delete(target.ID, ev.Id).Do(); err != nil {
 						msg := fmt.Sprintf("Cleanup delete error after %d deletions: %v", deleted, err)
 						adminLog(msg, "")
@@ -262,7 +273,7 @@ func simulateCleanup(cfg Config) []string {
 				if s == "" {
 					continue
 				}
-				if cleanupEventSource(s, cfg) != "" {
+				if cleanupEventSource(s, ev.Description, cfg) != "" {
 					wouldDelete = append(wouldDelete, s+" removed from calendar"+targetLabel(target, multiTarget))
 				}
 			}
@@ -281,7 +292,7 @@ func cleanupTargetCalendar(cfg Config, calendarID, mode string, sources []string
 	label := cleanupModeLabel(mode)
 	sourceDetail := strings.Join(sources, ", ")
 	if sourceDetail == "" {
-		sourceDetail = "radarr, sonarr"
+		sourceDetail = "radarr, sonarr, steam"
 	}
 	if calendarID == "" {
 		adminLog(label+" target cleanup failed", "missing calendar ID")
@@ -319,7 +330,7 @@ func cleanupTargetCalendar(cfg Config, calendarID, mode string, sources []string
 		}
 		for _, ev := range res.Items {
 			scanned++
-			source := cleanupEventSource(ev.Summary, cfg)
+			source := cleanupEventSource(ev.Summary, ev.Description, cfg)
 			if source == "" {
 				continue
 			}
@@ -349,6 +360,10 @@ func hasSuffix(s, suffix string) bool {
 		return false
 	}
 	return s[len(s)-len(suffix):] == suffix
+}
+
+func steamEventDescription(description string) bool {
+	return strings.Contains(description, "Steam App ID:")
 }
 
 // templateSuffix extracts the text that follows {title} in an event naming

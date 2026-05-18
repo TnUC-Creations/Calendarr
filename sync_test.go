@@ -3,11 +3,33 @@ package main
 import (
 	"bytes"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	"google.golang.org/api/calendar/v3"
 )
+
+func TestCheckConnectivityDoesNotPreflightSteam(t *testing.T) {
+	bodyBytes, err := os.ReadFile("sync.go")
+	if err != nil {
+		t.Fatalf("read sync.go: %v", err)
+	}
+	body := string(bodyBytes)
+	start := strings.Index(body, "func checkConnectivity(")
+	if start < 0 {
+		t.Fatal("checkConnectivity function not found in sync.go")
+	}
+	end := strings.Index(body[start:], "\nfunc listCalendarEvents(")
+	if end < 0 {
+		t.Fatal("checkConnectivity function end marker not found in sync.go")
+	}
+	checkBody := body[start : start+end]
+
+	if strings.Contains(checkBody, "cfg.UseSteam") || strings.Contains(checkBody, "checkSteamConnectivity") {
+		t.Fatal("checkConnectivity must not preflight Steam; Steam failures must stay non-fatal through syncSteam")
+	}
+}
 
 func TestAllDayCalendarEventUsesExclusiveEndDate(t *testing.T) {
 	ev := allDayCalendarEvent("Movie", "Overview", "2026-05-03", "9")

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -163,7 +164,45 @@ func TestCalendarTargetsForSourceRoutesByToggle(t *testing.T) {
 	}
 }
 
-func TestSourceSetDefaultsToBothSources(t *testing.T) {
+func TestNormalizeCalendarTargetsEnablesFirstExistingTargetWhenSteamGloballyEnabled(t *testing.T) {
+	cfg := Config{
+		UseSteam: true,
+		CalendarTargets: []CalendarTarget{
+			{ID: "movies", RadarrEnabled: true},
+			{ID: "shows", SonarrEnabled: true},
+		},
+	}
+
+	normalizeCalendarTargets(&cfg)
+
+	if !cfg.CalendarTargets[0].SteamEnabled {
+		t.Fatalf("first target SteamEnabled = false, want true")
+	}
+	if cfg.CalendarTargets[1].SteamEnabled {
+		t.Fatalf("second target SteamEnabled = true, want unchanged false")
+	}
+}
+
+func TestNormalizeCalendarTargetsKeepsExistingSteamTarget(t *testing.T) {
+	cfg := Config{
+		UseSteam: true,
+		CalendarTargets: []CalendarTarget{
+			{ID: "movies"},
+			{ID: "steam", SteamEnabled: true},
+		},
+	}
+
+	normalizeCalendarTargets(&cfg)
+
+	if cfg.CalendarTargets[0].SteamEnabled {
+		t.Fatalf("first target SteamEnabled = true, want unchanged false")
+	}
+	if !cfg.CalendarTargets[1].SteamEnabled {
+		t.Fatalf("second target SteamEnabled = false, want preserved true")
+	}
+}
+
+func TestSourceSetDefaultsToAllCleanupSources(t *testing.T) {
 	set := sourceSet(nil)
 
 	if _, ok := set["radarr"]; !ok {
@@ -171,6 +210,9 @@ func TestSourceSetDefaultsToBothSources(t *testing.T) {
 	}
 	if _, ok := set["sonarr"]; !ok {
 		t.Fatal("expected sonarr in default source set")
+	}
+	if _, ok := set["steam"]; !ok {
+		t.Fatal("expected steam in default source set")
 	}
 }
 
@@ -207,5 +249,40 @@ func TestRestoreBaseUnmarshalPreservesDefaultTrueBooleans(t *testing.T) {
 		if !got {
 			t.Errorf("%s = false after restore-style unmarshal, want true", name)
 		}
+	}
+}
+
+func TestNormalizeLoadedConfigClearsLegacySteamAPIKey(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SteamAPIKey = "legacy-key"
+
+	normalizeLoadedConfig(&cfg)
+
+	if cfg.SteamAPIKey != "" {
+		t.Fatalf("SteamAPIKey = %q, want cleared during config normalization", cfg.SteamAPIKey)
+	}
+}
+
+func TestSaveConfigDoesNotPersistLegacySteamAPIKey(t *testing.T) {
+	oldDataDir := dataDir
+	dataDir = t.TempDir()
+	t.Cleanup(func() { dataDir = oldDataDir })
+
+	cfg := defaultConfig()
+	cfg.SteamAPIKey = "legacy-key"
+	if err := saveConfig(cfg); err != nil {
+		t.Fatalf("saveConfig: %v", err)
+	}
+
+	data, err := os.ReadFile(dataPath(configFile))
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var saved map[string]interface{}
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("unmarshal saved config: %v", err)
+	}
+	if _, ok := saved["steam_api_key"]; ok {
+		t.Fatalf("saved config contains legacy steam_api_key: %s", data)
 	}
 }

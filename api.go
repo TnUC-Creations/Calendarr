@@ -545,7 +545,6 @@ func apiUpcoming(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	end := time.Now().UTC().Add(120 * 24 * time.Hour).Format(time.RFC3339)
-	epRe := regexp.MustCompile(`\bS\d{2}E\d{2}\b`)
 	type event struct {
 		Title    string `json:"title"`
 		Date     string `json:"date"`
@@ -571,15 +570,8 @@ func apiUpcoming(w http.ResponseWriter, r *http.Request) {
 			if e.Start != nil {
 				date = e.Start.Date
 			}
-			var kind string
-			switch {
-			case strings.HasSuffix(title, "Theater Release"):
-				kind = "theater"
-			case strings.HasSuffix(title, "Digital Release"):
-				kind = "digital"
-			case epRe.MatchString(title):
-				kind = "episode"
-			default:
+			kind := upcomingEventKind(title, e.Description, cfg)
+			if kind == "" {
 				continue
 			}
 			events = append(events, event{Title: title, Date: date, Kind: kind, Calendar: calName})
@@ -597,13 +589,63 @@ func apiUpcoming(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{"events": events, "error": nil})
 }
 
+func upcomingEventKind(summary, description string, cfg Config) string {
+	switch cleanupEventKindForEvent(summary, description, cfg) {
+	case "radarr_theater":
+		return "theater"
+	case "radarr_digital":
+		return "digital"
+	case "sonarr":
+		return "episode"
+	case "steam":
+		return "steam"
+	default:
+		return ""
+	}
+}
+
 // ---- /api/test/* ------------------------------------------------------------
+
+func logSettingsTestStart(service string) {
+	logEvent(fmt.Sprintf("[Settings Test] %s start", service))
+}
+
+func logSettingsTestSuccess(service string) {
+	logEvent(fmt.Sprintf("[Settings Test] %s success", service))
+}
+
+func logSettingsTestFailure(service, reason string) {
+	logEvent(fmt.Sprintf("[Settings Test] %s failure: %s", service, sanitizeSettingsTestReason(reason)))
+}
+
+func sanitizeSettingsTestReason(reason string) string {
+	reason = strings.TrimSpace(reason)
+	reason = strings.Join(strings.Fields(reason), " ")
+	if reason == "" {
+		return "unknown error"
+	}
+	reason = settingsTestURLRe.ReplaceAllString(reason, "[url]")
+	reason = redactSecretLikeText(reason)
+	if len(reason) > 300 {
+		reason = reason[:300] + "..."
+	}
+	return reason
+}
+
+var settingsTestURLRe = regexp.MustCompile(`(?i)\bhttps?://[^\s"']+|\b[a-z0-9.-]+\.[a-z]{2,}(/[^\s"']*)?`)
+
+func settingsTestError(w http.ResponseWriter, service string, status int, msg string) {
+	logSettingsTestFailure(service, msg)
+	jsonError(w, status, msg)
+}
 
 func apiTestRadarr(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	const service = "Radarr"
+	logSettingsTestStart(service)
 	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		URL    string `json:"radarr_url"`
@@ -612,37 +654,39 @@ func apiTestRadarr(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		if isBodyTooLarge(err) {
 			writeTooLarge(w, "Request body too large.")
+			logSettingsTestFailure(service, "Request body too large.")
 			return
 		}
-		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
+		settingsTestError(w, service, http.StatusBadRequest, "Malformed JSON payload.")
 		return
 	}
 	if body.URL == "" || body.APIKey == "" {
-		jsonError(w, http.StatusBadRequest, "URL and API Key are required.")
+		settingsTestError(w, service, http.StatusBadRequest, "URL and API Key are required.")
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := newRequestWithKey("GET", body.URL+"/system/status", body.APIKey)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		settingsTestError(w, service, http.StatusBadRequest, err.Error())
 		return
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		jsonError(w, http.StatusBadGateway, err.Error())
+		settingsTestError(w, service, http.StatusBadGateway, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		jsonError(w, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		settingsTestError(w, service, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
 		return
 	}
 	var info map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		jsonError(w, http.StatusBadGateway, "Could not read Radarr response.")
+		settingsTestError(w, service, http.StatusBadGateway, "Could not read Radarr response.")
 		return
 	}
 	ver, _ := info["version"].(string)
+	logSettingsTestSuccess(service)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Connected! Radarr v" + ver})
 }
 
@@ -651,6 +695,8 @@ func apiTestSonarr(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	const service = "Sonarr"
+	logSettingsTestStart(service)
 	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		URL    string `json:"sonarr_url"`
@@ -659,37 +705,39 @@ func apiTestSonarr(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		if isBodyTooLarge(err) {
 			writeTooLarge(w, "Request body too large.")
+			logSettingsTestFailure(service, "Request body too large.")
 			return
 		}
-		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
+		settingsTestError(w, service, http.StatusBadRequest, "Malformed JSON payload.")
 		return
 	}
 	if body.URL == "" || body.APIKey == "" {
-		jsonError(w, http.StatusBadRequest, "URL and API Key are required.")
+		settingsTestError(w, service, http.StatusBadRequest, "URL and API Key are required.")
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := newRequestWithKey("GET", body.URL+"/system/status", body.APIKey)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		settingsTestError(w, service, http.StatusBadRequest, err.Error())
 		return
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		jsonError(w, http.StatusBadGateway, err.Error())
+		settingsTestError(w, service, http.StatusBadGateway, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		jsonError(w, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		settingsTestError(w, service, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
 		return
 	}
 	var info map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		jsonError(w, http.StatusBadGateway, "Could not read Sonarr response.")
+		settingsTestError(w, service, http.StatusBadGateway, "Could not read Sonarr response.")
 		return
 	}
 	ver, _ := info["version"].(string)
+	logSettingsTestSuccess(service)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Connected! Sonarr v" + ver})
 }
 
@@ -698,6 +746,8 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	const service = "Pushover"
+	logSettingsTestStart(service)
 	limitBody(w, r, maxJSONBodyBytes)
 	var body struct {
 		Token string `json:"pushover_app_token"`
@@ -706,13 +756,14 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		if isBodyTooLarge(err) {
 			writeTooLarge(w, "Request body too large.")
+			logSettingsTestFailure(service, "Request body too large.")
 			return
 		}
-		jsonError(w, http.StatusBadRequest, "Malformed JSON payload.")
+		settingsTestError(w, service, http.StatusBadRequest, "Malformed JSON payload.")
 		return
 	}
 	if body.Token == "" || body.User == "" {
-		jsonError(w, http.StatusBadRequest, "App Token and User Key are required.")
+		settingsTestError(w, service, http.StatusBadRequest, "App Token and User Key are required.")
 		return
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -721,20 +772,21 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		"user":  {body.User},
 	})
 	if err != nil {
-		jsonError(w, http.StatusBadGateway, err.Error())
+		settingsTestError(w, service, http.StatusBadGateway, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		jsonError(w, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		settingsTestError(w, service, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
 		return
 	}
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		jsonError(w, http.StatusBadGateway, "Could not read Pushover response.")
+		settingsTestError(w, service, http.StatusBadGateway, "Could not read Pushover response.")
 		return
 	}
 	if status, _ := result["status"].(float64); status == 1 {
+		logSettingsTestSuccess(service)
 		jsonOK(w, map[string]interface{}{"ok": true, "message": "Credentials valid!"})
 		return
 	}
@@ -746,7 +798,46 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		}
 		msg = strings.Join(parts, ", ")
 	}
-	jsonError(w, http.StatusBadGateway, msg)
+	settingsTestError(w, service, http.StatusBadGateway, msg)
+}
+
+func apiTestSteam(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", 405)
+		return
+	}
+	const service = "Steam"
+	logSettingsTestStart(service)
+	limitBody(w, r, maxJSONBodyBytes)
+	var body struct {
+		SteamID string `json:"steam_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if isBodyTooLarge(err) {
+			writeTooLarge(w, "Request body too large.")
+			logSettingsTestFailure(service, "Request body too large.")
+			return
+		}
+		settingsTestError(w, service, http.StatusBadRequest, "Malformed JSON payload.")
+		return
+	}
+	if strings.TrimSpace(body.SteamID) == "" {
+		settingsTestError(w, service, http.StatusBadRequest, "Steam ID is required.")
+		return
+	}
+	testCfg := Config{
+		SteamID: body.SteamID,
+	}
+	var buf strings.Builder
+	err := checkSteamConnectivity(testCfg, &buf)
+	output := buf.String()
+	if err != nil {
+		logSettingsTestFailure(service, err.Error())
+		jsonError(w, http.StatusBadGateway, output+"\nError: "+err.Error())
+		return
+	}
+	logSettingsTestSuccess(service)
+	jsonOK(w, map[string]interface{}{"ok": true, "message": output})
 }
 
 func apiTestCalendar(w http.ResponseWriter, r *http.Request) {
@@ -754,15 +845,19 @@ func apiTestCalendar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	const service = "Calendar"
+	logSettingsTestStart(service)
 	cfg, _ := loadConfig()
 	calSvc, err := getCalService(cfg)
 	if err != nil {
+		logSettingsTestFailure(service, err.Error())
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
 	targets := calendarTargets(cfg)
 	cal, err := calSvc.Calendars.Get(targets[0].ID).Do()
 	if err != nil {
+		logSettingsTestFailure(service, err.Error())
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
 	}
@@ -770,6 +865,7 @@ func apiTestCalendar(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = cal.Id
 	}
+	logSettingsTestSuccess(service)
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Connected! Calendar: " + name})
 }
 
