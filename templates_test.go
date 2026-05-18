@@ -122,6 +122,17 @@ func TestSettingsTemplateRendersSteamColorControl(t *testing.T) {
 	}
 }
 
+func TestSettingsTemplateTargetSourceCleanupUsesAllMode(t *testing.T) {
+	src, err := os.ReadFile("templates/settings.html")
+	if err != nil {
+		t.Fatalf("read settings template: %v", err)
+	}
+	html := string(src)
+	if !strings.Contains(html, `body: JSON.stringify({ calendar_id: calendarID, mode: 'all', sources })`) {
+		t.Fatal("calendar target source cleanup should request all-mode cleanup")
+	}
+}
+
 func TestLayoutGoogleCalendarBannerLinksToCalendarTab(t *testing.T) {
 	loadTemplates()
 	var out bytes.Buffer

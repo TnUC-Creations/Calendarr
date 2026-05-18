@@ -1260,7 +1260,7 @@ function cleanupTargetEvents(calendarID, sources) {
     return csrfFetch('/api/cleanup/target', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ calendar_id: calendarID, sources })
+        body: JSON.stringify({ calendar_id: calendarID, mode: 'all', sources })
     })
         .then(r => r.json())
         .then(data => {

@@ -3,7 +3,7 @@
 ; Prerequisites: calendarr.exe must exist in the same folder as this script.
 
 #define AppName "Calendarr"
-#define AppVersion "1.11.1"
+#define AppVersion "1.11.2"
 #define AppPublisher "TnUC Creations"
 #define AppURL "https://github.com/TnUC-Creations/Calendarr"
 #define AppExeName "calendarr.exe"

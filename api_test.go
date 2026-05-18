@@ -126,6 +126,18 @@ func TestUpcomingEventKindIncludesSteamEvents(t *testing.T) {
 	}
 }
 
+func TestTargetCleanupModeDefaultsSourceCleanupToAll(t *testing.T) {
+	if got := targetCleanupMode("", []string{"steam"}); got != "all" {
+		t.Fatalf("targetCleanupMode blank with source = %q, want all", got)
+	}
+	if got := targetCleanupMode("future", []string{"steam"}); got != "future" {
+		t.Fatalf("targetCleanupMode explicit future = %q, want future", got)
+	}
+	if got := targetCleanupMode("", nil); got != "" {
+		t.Fatalf("targetCleanupMode blank without source = %q, want blank", got)
+	}
+}
+
 func assertJSONFailure(t *testing.T, body string) {
 	t.Helper()
 	var got map[string]interface{}

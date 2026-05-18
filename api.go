@@ -322,8 +322,8 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 	setCleanupRunning()
 	cfg, _ := loadConfig()
 	calendarID := body.CalendarID
-	mode := body.Mode
 	sources := body.Sources
+	mode := targetCleanupMode(body.Mode, sources)
 	safeGo(func() {
 		_, scanned, deleted, err := cleanupTargetCalendar(cfg, calendarID, mode, sources)
 		if err != nil {
@@ -333,6 +333,13 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 		finishCleanup(true, scanned, deleted, fmt.Sprintf("Done. Scanned %d events, deleted %d.", scanned, deleted))
 	})
 	jsonOK(w, map[string]interface{}{"ok": true, "started": true})
+}
+
+func targetCleanupMode(mode string, sources []string) string {
+	if strings.TrimSpace(mode) == "" && len(sources) > 0 {
+		return "all"
+	}
+	return mode
 }
 
 func apiCalendarTargetsSave(w http.ResponseWriter, r *http.Request) {
