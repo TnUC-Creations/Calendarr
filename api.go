@@ -28,6 +28,32 @@ func jsonError(w http.ResponseWriter, status int, msg string) {
 	jsonStatus(w, status, map[string]interface{}{"ok": false, "message": msg})
 }
 
+// ---- /health ----------------------------------------------------------------
+
+func apiHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	s := getAppState()
+	var lastSync, nextSync interface{}
+	if s.LastRun != nil {
+		lastSync = s.LastRun.Format(time.RFC3339)
+	}
+	if s.NextRun != nil {
+		nextSync = s.NextRun.Format(time.RFC3339)
+	}
+	jsonOK(w, map[string]interface{}{
+		"ok":               true,
+		"version":          appVersion,
+		"uptime_seconds":   int(time.Since(startTime).Seconds()),
+		"is_syncing":       s.IsRunning,
+		"last_sync":        lastSync,
+		"last_sync_status": s.LastRunStatus,
+		"next_sync":        nextSync,
+	})
+}
+
 // ---- /api/status ------------------------------------------------------------
 
 func apiStatus(w http.ResponseWriter, r *http.Request) {

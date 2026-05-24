@@ -303,6 +303,9 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/assets/about-banner-dark.png", handleAboutBannerDark)
 	mux.HandleFunc("/assets/about-banner-light.png", handleAboutBannerLight)
 
+	// Health endpoint — auth-exempt, used by the dashboard monitor
+	mux.HandleFunc("/health", apiHealth)
+
 	// JSON API
 	mux.HandleFunc("/api/status", apiStatus)
 	mux.HandleFunc("/api/run", apiRun)
