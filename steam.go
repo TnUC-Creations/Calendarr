@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,8 +31,9 @@ const (
 )
 
 var (
-	steamIDRe = regexp.MustCompile(`^7656\d{13}$`)
-	appIDRe   = regexp.MustCompile(`^\d{1,10}$`)
+	steamIDRe               = regexp.MustCompile(`^7656\d{13}$`)
+	appIDRe                 = regexp.MustCompile(`^\d{1,10}$`)
+	steamAppIDDescriptionRe = regexp.MustCompile(`(?m)^Steam App ID:\s*(\d{1,10})\s*$`)
 
 	secretAssignmentRe         = regexp.MustCompile(`(?i)\b(api[_-]?key|token|secret|session|csrf|oauth|refresh[_-]?token|password|user[_-]?key)=['"]?[^'"&\s<>]+`)
 	longSecretRe               = regexp.MustCompile(`\b[A-Za-z0-9_-]{24,}\b`)
@@ -452,6 +454,53 @@ func sortedSteamWishlistAppIDs(wishlist map[string]steamWishlistEntry) []string 
 	return appIDs
 }
 
+func steamAppIDFromDescription(description string) (string, bool) {
+	match := steamAppIDDescriptionRe.FindStringSubmatch(description)
+	if len(match) != 2 {
+		return "", false
+	}
+	return match[1], true
+}
+
+func reconcileSteamWishlistEvents(calSvc *calendar.Service, calendarID string, events []*calendar.Event,
+	wishlist map[string]steamWishlistEntry, dryRun bool) ([]*calendar.Event, []string, error) {
+
+	if len(wishlist) == 0 {
+		return events, nil, nil
+	}
+	kept := make([]*calendar.Event, 0, len(events))
+	var deleted []string
+	var deleteErrs []error
+	for _, ev := range events {
+		if ev == nil {
+			kept = append(kept, ev)
+			continue
+		}
+		appID, ok := steamAppIDFromDescription(ev.Description)
+		if !ok {
+			kept = append(kept, ev)
+			continue
+		}
+		if _, stillWishlisted := wishlist[appID]; stillWishlisted {
+			kept = append(kept, ev)
+			continue
+		}
+		if !dryRun {
+			if err := calSvc.Events.Delete(calendarID, ev.Id).Do(); err != nil {
+				deleteErrs = append(deleteErrs, fmt.Errorf("delete %q: %w", ev.Summary, err))
+				kept = append(kept, ev)
+				continue
+			}
+		}
+		summary := ev.Summary
+		if summary == "" {
+			summary = "Steam App " + appID
+		}
+		deleted = append(deleted, summary+" removed from calendar")
+	}
+	return kept, deleted, errors.Join(deleteErrs...)
+}
+
 // syncSteam runs the Steam phase of a sync. configErr is true when the failure
 // is a configuration problem (bad ID, bad key, profile not found) that should
 // surface on the dashboard. Data-level failures (a single game's details fail)
@@ -510,9 +559,19 @@ func syncSteam(cfg Config, calSvc *calendar.Service, targets []CalendarTarget,
 			fmt.Fprintf(w, "[Steam] [ERROR] Failed to load existing events for %s: %v\n", target.ID, listErr)
 			continue
 		}
-		existingIndex := indexEventsBySummary(existingEvents)
+		added, updated, removed, skippedComing, skippedVague, perGameErr := 0, 0, 0, 0, 0, 0
 
-		added, updated, skippedComing, skippedVague, perGameErr := 0, 0, 0, 0, 0
+		existingEvents, removedMessages, reconcileErr := reconcileSteamWishlistEvents(calSvc, target.ID, existingEvents, wishlist, dryRun)
+		for _, msg := range removedMessages {
+			removed++
+			result.Deleted = append(result.Deleted, msg+targetLabel(target, multi))
+			fmt.Fprintf(w, "[Steam] Removed from wishlist: %s%s\n", msg, targetLabel(target, multi))
+		}
+		if reconcileErr != nil {
+			perGameErr++
+			fmt.Fprintf(w, "[Steam] [ERROR] Failed removing one or more stale wishlist events from %s: %v\n", target.ID, reconcileErr)
+		}
+		existingIndex := indexEventsBySummary(existingEvents)
 
 		for i, appID := range appIDs {
 			if rateLimitAborted {
@@ -611,8 +670,8 @@ func syncSteam(cfg Config, calSvc *calendar.Service, targets []CalendarTarget,
 			time.Sleep(steamRequestDelay)
 		}
 
-		fmt.Fprintf(w, "[Steam] %s — added %d, updated %d, skipped (coming soon without exact date) %d, skipped (vague date) %d, errors %d\n",
-			target.ID, added, updated, skippedComing, skippedVague, perGameErr)
+		fmt.Fprintf(w, "[Steam] %s — added %d, updated %d, removed %d, skipped (coming soon without exact date) %d, skipped (vague date) %d, errors %d\n",
+			target.ID, added, updated, removed, skippedComing, skippedVague, perGameErr)
 	}
 	if err := saveSteamAppDetailsCache(cache); err != nil {
 		fmt.Fprintf(w, "[Steam] [WARN] Failed saving Steam metadata cache: %v\n", err)

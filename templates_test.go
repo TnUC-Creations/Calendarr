@@ -37,6 +37,53 @@ func TestSettingsTemplateRendersPushoverUpdateCheckbox(t *testing.T) {
 	}
 }
 
+func TestSettingsTemplateRendersPublicHealthFeedToggle(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := SettingsData{
+		PageBase: PageBase{
+			CSRFToken:   "test-token",
+			CurrentPage: "settings",
+		},
+		Config: Config{PublicHealthFeed: true},
+	}
+	if err := pageTemplates["settings"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if !strings.Contains(html, `name="public_health_feed"`) || !strings.Contains(html, `id="public_health_feed"`) {
+		t.Fatal("settings template did not render public health feed toggle")
+	}
+	if !strings.Contains(html, `Anyone who can reach Calendarr can read recent event titles`) {
+		t.Fatal("settings template should explain the public health feed risk")
+	}
+}
+
+func TestSettingsTemplateAutosavesPublicHealthFeedToggle(t *testing.T) {
+	src, err := os.ReadFile("templates/settings.html")
+	if err != nil {
+		t.Fatalf("read settings template: %v", err)
+	}
+	html := string(src)
+	if !strings.Contains(html, `(target.closest('#tab-security-backup') && target.id !== 'public_health_feed')`) {
+		t.Fatal("Security & Backup autosave exception should allow public_health_feed changes")
+	}
+}
+
+func TestSettingsTemplateGeneralFieldsUseTopAlignment(t *testing.T) {
+	src, err := os.ReadFile("templates/settings.html")
+	if err != nil {
+		t.Fatalf("read settings template: %v", err)
+	}
+	html := string(src)
+	if !strings.Contains(html, `<div class="row g-3 align-items-start">`) {
+		t.Fatal("General settings fields should use top alignment")
+	}
+	if !strings.Contains(html, `<div class="col-md-3 pb-1 pt-md-4">`) {
+		t.Fatal("General settings switches should use a desktop offset")
+	}
+}
+
 func TestSettingsTemplateDisablesLANAccessWithoutPassword(t *testing.T) {
 	loadTemplates()
 	var out bytes.Buffer

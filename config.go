@@ -97,6 +97,7 @@ type Config struct {
 	MaxLogFiles       int  `json:"max_log_files"`
 	MaxHistoryEntries int  `json:"max_history_entries"`
 	AutoCleanupPast   bool `json:"auto_cleanup_past"`
+	PublicHealthFeed  bool `json:"public_health_feed"`
 
 	WebUIPasswordHash string `json:"web_ui_password_hash"`
 }

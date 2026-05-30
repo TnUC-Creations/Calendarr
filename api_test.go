@@ -2,12 +2,102 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 )
+
+func TestAPIHealthAllowsUnauthenticatedLivenessCheck(t *testing.T) {
+	oldDataDir := dataDir
+	dataDir = t.TempDir()
+	t.Cleanup(func() { dataDir = oldDataDir })
+	cfg := defaultConfig()
+	cfg.PublicHealthFeed = true
+	if err := saveConfig(cfg); err != nil {
+		t.Fatalf("saveConfig: %v", err)
+	}
+	if err := saveHistory([]HistoryEntry{
+		{Timestamp: "2026-05-30 08:00:00", Action: "added", Message: "First"},
+		{Timestamp: "2026-05-30 08:01:00", Action: "system", Message: "Do not expose"},
+		{Timestamp: "2026-05-30 08:02:00", Action: "deleted", Message: "Second"},
+	}); err != nil {
+		t.Fatalf("saveHistory: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", apiHealth)
+	handler := authMiddleware(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Fatalf("Location = %q, want no redirect", got)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body) != 3 || body["ok"] != true || body["version"] != appVersion {
+		t.Fatalf("response = %#v, want ok, version, and history only", body)
+	}
+	history, ok := body["history"].([]interface{})
+	if !ok || len(history) != 2 {
+		t.Fatalf("history = %#v, want two public entries", body["history"])
+	}
+	first, ok := history[0].(map[string]interface{})
+	if !ok || first["action"] != "deleted" || first["message"] != "Second" {
+		t.Fatalf("first history entry = %#v, want newest deleted entry", history[0])
+	}
+	second, ok := history[1].(map[string]interface{})
+	if !ok || second["action"] != "added" || second["message"] != "First" {
+		t.Fatalf("second history entry = %#v, want older added entry", history[1])
+	}
+}
+
+func TestAPIHealthReturnsNotFoundWhenPublicFeedDisabled(t *testing.T) {
+	oldDataDir := dataDir
+	dataDir = t.TempDir()
+	t.Cleanup(func() { dataDir = oldDataDir })
+	if err := saveConfig(defaultConfig()); err != nil {
+		t.Fatalf("saveConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	apiHealth(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestPublicHealthHistoryReturnsNewestTenChanges(t *testing.T) {
+	entries := []HistoryEntry{{Action: "system", Message: "ignore"}}
+	for i := 0; i < 12; i++ {
+		entries = append(entries, HistoryEntry{Action: "updated", Message: fmt.Sprintf("change-%d", i)})
+	}
+
+	got := publicHealthHistory(entries)
+
+	if len(got) != 10 {
+		t.Fatalf("history length = %d, want 10", len(got))
+	}
+	if got[0].Message != "change-11" || got[9].Message != "change-2" {
+		t.Fatalf("history = %#v, want newest ten changes in reverse chronological order", got)
+	}
+}
 
 func TestAPITestRadarrRejectsMalformedJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/test/radarr", strings.NewReader("{"))

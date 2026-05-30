@@ -54,7 +54,7 @@
                     <div class="card">
                         <div class="card-header"><i class="bi bi-sliders"></i> General</div>
                         <div class="card-body">
-                            <div class="row g-3 align-items-end">
+                            <div class="row g-3 align-items-start">
                                 <div class="col-md-3">
                                     <label class="form-label">
                                         Run Interval (hours)
@@ -101,7 +101,7 @@
                                         <i class="bi bi-arrow-clockwise me-1"></i>Restart the Calendarr service after saving for this access change to take effect.
                                     </div>
                                 </div>
-                                <div class="col-md-3 pb-1">
+                                <div class="col-md-3 pb-1 pt-md-4">
                                     <div class="form-check form-switch mb-2">
                                         <input class="form-check-input" type="checkbox" role="switch"
                                                name="sync_on_start" id="sync_on_start"
@@ -695,6 +695,31 @@
                     </div>
                 </div>
 
+                <!-- Public Health Feed -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header"><i class="bi bi-heart-pulse"></i> Public Health Feed</div>
+                        <div class="card-body">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       name="public_health_feed" id="public_health_feed"
+                                       {{if .Config.PublicHealthFeed}}checked{{end}}>
+                                <label class="form-check-label" for="public_health_feed">
+                                    <strong>Enable unauthenticated <code>/health</code> endpoint</strong>
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Public Health Feed"
+                                        data-bs-content="Allows monitoring tools to check whether Calendarr is running without signing in. The response includes the app version and the 10 most recent added, updated, or deleted history entries.">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </label>
+                            </div>
+                            <div class="form-text text-warning mt-2">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                Anyone who can reach Calendarr can read recent event titles while this is enabled.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Backup -->
                 <div class="col-md-5">
                     <div class="card h-100">
@@ -882,6 +907,11 @@ function scheduleAutosave(delay = 800) {
     autosaveTimer = setTimeout(() => autosaveSettingsNow(), delay);
 }
 
+function excludesAutosave(target) {
+    return target.closest('#calendar-targets') ||
+        (target.closest('#tab-security-backup') && target.id !== 'public_health_feed');
+}
+
 function autosaveSettingsOnUnload() {
     if (!settingsForm || !settingsDirty) return;
     document.querySelectorAll('.calendar-color-select').forEach(select => { select.disabled = false; });
@@ -945,13 +975,13 @@ settingsForm.addEventListener('submit', function(e) {
 });
 
 settingsForm.addEventListener('change', function(e) {
-    if (e.target.closest('#calendar-targets') || e.target.closest('#tab-security-backup')) return;
+    if (excludesAutosave(e.target)) return;
     if (e.target === webBindSelect) updateWebBindRestartWarning();
     scheduleAutosave(0);
 });
 
 settingsForm.addEventListener('input', function(e) {
-    if (e.target.closest('#calendar-targets') || e.target.closest('#tab-security-backup')) return;
+    if (excludesAutosave(e.target)) return;
     if (e.target.matches('input[type="text"], input[type="password"], input[type="number"], select')) {
         settingsDirty = true;
         setSaveStatus('Unsaved changes', 'warning');
@@ -959,7 +989,7 @@ settingsForm.addEventListener('input', function(e) {
 });
 
 settingsForm.addEventListener('focusout', function(e) {
-    if (e.target.closest('#calendar-targets') || e.target.closest('#tab-security-backup')) return;
+    if (excludesAutosave(e.target)) return;
     if (e.target.matches('input, select, textarea')) {
         autosaveSettingsNow();
     }

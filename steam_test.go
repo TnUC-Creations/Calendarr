@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	calendar "google.golang.org/api/calendar/v3"
+	"google.golang.org/api/option"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -908,6 +912,97 @@ func TestSyncSteamUsesSteamTargetColor(t *testing.T) {
 	}
 	if !strings.Contains(body, "allDayEventNeedsUpdate(existing, dateStr, target.SteamColorID)") {
 		t.Fatal("syncSteam should update existing Steam events when target.SteamColorID changes")
+	}
+}
+
+func TestSteamAppIDFromDescription(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		want        string
+		wantOK      bool
+	}{
+		{name: "generated marker", description: "Description\n\nSteam App ID: 12345", want: "12345", wantOK: true},
+		{name: "marker with whitespace", description: "Steam App ID:   67890  ", want: "67890", wantOK: true},
+		{name: "missing marker", description: "ordinary personal event", wantOK: false},
+		{name: "invalid marker", description: "Steam App ID: not-a-number", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := steamAppIDFromDescription(tt.description)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("steamAppIDFromDescription(%q) = %q, %v; want %q, %v", tt.description, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestReconcileSteamWishlistEventsDryRunRemovesOnlyStaleSteamEvents(t *testing.T) {
+	events := []*calendar.Event{
+		{Id: "keep", Summary: "Keep - Steam Release", Description: "Steam App ID: 100"},
+		{Id: "remove", Summary: "Remove - Steam Release", Description: "Steam App ID: 200"},
+		{Id: "personal", Summary: "Personal", Description: "Do not touch"},
+	}
+	wishlist := map[string]steamWishlistEntry{"100": {}}
+
+	kept, deleted, err := reconcileSteamWishlistEvents(nil, "calendar", events, wishlist, true)
+
+	if err != nil {
+		t.Fatalf("reconcileSteamWishlistEvents: %v", err)
+	}
+	if len(kept) != 2 || kept[0].Id != "keep" || kept[1].Id != "personal" {
+		t.Fatalf("kept = %#v, want wishlisted and personal events", kept)
+	}
+	if len(deleted) != 1 || deleted[0] != "Remove - Steam Release removed from calendar" {
+		t.Fatalf("deleted = %#v, want stale Steam event", deleted)
+	}
+}
+
+func TestReconcileSteamWishlistEventsPreservesEventsForEmptyWishlist(t *testing.T) {
+	events := []*calendar.Event{
+		{Id: "keep", Summary: "Keep - Steam Release", Description: "Steam App ID: 100"},
+	}
+
+	kept, deleted, err := reconcileSteamWishlistEvents(nil, "calendar", events, nil, true)
+
+	if err != nil {
+		t.Fatalf("reconcileSteamWishlistEvents: %v", err)
+	}
+	if len(kept) != 1 || len(deleted) != 0 {
+		t.Fatalf("kept = %#v, deleted = %#v; want ambiguous empty wishlist preserved", kept, deleted)
+	}
+}
+
+func TestReconcileSteamWishlistEventsDeletesStaleCalendarEvent(t *testing.T) {
+	var deletedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		deletedPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	calSvc, err := calendar.NewService(context.Background(), option.WithEndpoint(srv.URL+"/"), option.WithoutAuthentication())
+	if err != nil {
+		t.Fatalf("calendar.NewService: %v", err)
+	}
+	events := []*calendar.Event{
+		{Id: "stale-event", Summary: "Remove - Steam Release", Description: "Steam App ID: 200"},
+	}
+	wishlist := map[string]steamWishlistEntry{"100": {}}
+
+	kept, deleted, err := reconcileSteamWishlistEvents(calSvc, "steam-calendar", events, wishlist, false)
+
+	if err != nil {
+		t.Fatalf("reconcileSteamWishlistEvents: %v", err)
+	}
+	if len(kept) != 0 || len(deleted) != 1 {
+		t.Fatalf("kept = %#v, deleted = %#v; want stale event deleted", kept, deleted)
+	}
+	if deletedPath != "/calendars/steam-calendar/events/stale-event" {
+		t.Fatalf("delete path = %q, want calendar event delete path", deletedPath)
 	}
 }
 

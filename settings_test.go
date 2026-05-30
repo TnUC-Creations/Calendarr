@@ -62,6 +62,24 @@ func TestApplySettingsFormPersistsPushoverUpdateAvailable(t *testing.T) {
 	}
 }
 
+func TestApplySettingsFormPersistsPublicHealthFeed(t *testing.T) {
+	cfg := defaultConfig()
+	form := url.Values{
+		"public_health_feed": {"on"},
+	}
+	req := httptest.NewRequest("POST", "/api/settings/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := parseSettingsRequest(req); err != nil {
+		t.Fatalf("parseSettingsRequest: %v", err)
+	}
+
+	applySettingsForm(&cfg, req)
+
+	if !cfg.PublicHealthFeed {
+		t.Fatal("PublicHealthFeed = false, want true")
+	}
+}
+
 func TestApplySettingsFormIgnoresLegacySteamAPIKey(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SteamAPIKey = "old-key"

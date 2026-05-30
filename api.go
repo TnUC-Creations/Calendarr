@@ -31,27 +31,32 @@ func jsonError(w http.ResponseWriter, status int, msg string) {
 // ---- /health ----------------------------------------------------------------
 
 func apiHealth(w http.ResponseWriter, r *http.Request) {
+	cfg, err := loadConfig()
+	if err != nil || !cfg.PublicHealthFeed {
+		http.NotFound(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	s := getAppState()
-	var lastSync, nextSync interface{}
-	if s.LastRun != nil {
-		lastSync = s.LastRun.Format(time.RFC3339)
-	}
-	if s.NextRun != nil {
-		nextSync = s.NextRun.Format(time.RFC3339)
-	}
 	jsonOK(w, map[string]interface{}{
-		"ok":               true,
-		"version":          appVersion,
-		"uptime_seconds":   int(time.Since(startTime).Seconds()),
-		"is_syncing":       s.IsRunning,
-		"last_sync":        lastSync,
-		"last_sync_status": s.LastRunStatus,
-		"next_sync":        nextSync,
+		"ok":      true,
+		"version": appVersion,
+		"history": publicHealthHistory(loadHistory()),
 	})
+}
+
+func publicHealthHistory(entries []HistoryEntry) []HistoryEntry {
+	const limit = 10
+	filtered := make([]HistoryEntry, 0, limit)
+	for i := len(entries) - 1; i >= 0 && len(filtered) < limit; i-- {
+		switch entries[i].Action {
+		case "added", "updated", "deleted":
+			filtered = append(filtered, entries[i])
+		}
+	}
+	return filtered
 }
 
 // ---- /api/status ------------------------------------------------------------

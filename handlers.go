@@ -403,6 +403,7 @@ func applySettingsForm(cfg *Config, r *http.Request) {
 	cfg.PushoverOnUpdate = r.FormValue("pushover_on_update_available") != ""
 	cfg.SyncOnStart = r.FormValue("sync_on_start") != ""
 	cfg.AutoCleanupPast = r.FormValue("auto_cleanup_past") != ""
+	cfg.PublicHealthFeed = r.FormValue("public_health_feed") != ""
 	cfg.WebBindAddress = normalizeWebBindAddress(r.FormValue("web_bind_address"))
 	cfg.RadarrURL = strings.TrimSpace(r.FormValue("radarr_url"))
 	cfg.RadarrAPIKey = strings.TrimSpace(r.FormValue("radarr_api_key"))
