@@ -19,7 +19,7 @@ import (
 
 const (
 	appName    = "Calendarr"
-	appVersion = "1.11.3"
+	appVersion = "1.12.0"
 	appAuthor  = "TnUC Creations"
 	appCreated = "April 2026"
 )
@@ -78,6 +78,7 @@ func runSyncJob() bool {
 
 func syncWorker() {
 	runTime := time.Now()
+	defer finishRunOnPanic(runTime)
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -224,6 +225,15 @@ func syncWorker() {
 	}
 }
 
+func finishRunOnPanic(runTime time.Time) {
+	if p := recover(); p != nil {
+		if isRunning() {
+			finishRun(runTime, "Error: sync failed unexpectedly. Check the logs for details.", nil, SyncStats{})
+		}
+		panic(p)
+	}
+}
+
 // ---- Background scheduler ---------------------------------------------------
 
 func backgroundScheduler() {
@@ -305,6 +315,7 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Health endpoint — auth-exempt, used by the dashboard monitor
 	mux.HandleFunc("/health", apiHealth)
+	mux.HandleFunc("/health/feed", apiHealthFeed)
 
 	// JSON API
 	mux.HandleFunc("/api/status", apiStatus)

@@ -695,10 +695,10 @@
                     </div>
                 </div>
 
-                <!-- Public Health Feed -->
+                <!-- Health Monitoring -->
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header"><i class="bi bi-heart-pulse"></i> Public Health Feed</div>
+                        <div class="card-header"><i class="bi bi-heart-pulse"></i> Health Monitoring</div>
                         <div class="card-body">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch"
@@ -707,14 +707,31 @@
                                 <label class="form-check-label" for="public_health_feed">
                                     <strong>Enable unauthenticated <code>/health</code> endpoint</strong>
                                     <button type="button" class="help-btn" data-bs-toggle="popover"
-                                        data-bs-placement="right" data-bs-title="Public Health Feed"
-                                        data-bs-content="Allows monitoring tools to check whether Calendarr is running without signing in. The response includes the app version and the 10 most recent added, updated, or deleted history entries.">
+                                        data-bs-placement="right" data-bs-title="Public Health Check"
+                                        data-bs-content="Allows monitoring tools to check whether Calendarr is running without signing in. The response includes only an OK status and the app version.">
+                                        <i class="bi bi-question-circle"></i></button>
+                                </label>
+                            </div>
+                            <div class="form-check form-switch mt-3">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       name="detailed_health_feed" id="detailed_health_feed"
+                                       {{if .Config.DetailedHealthFeed}}checked{{end}}>
+                                <label class="form-check-label" for="detailed_health_feed">
+                                    <strong>Enable token-protected <code>/health/feed</code> details</strong>
+                                    <button type="button" class="help-btn" data-bs-toggle="popover"
+                                        data-bs-placement="right" data-bs-title="Detailed Health Feed"
+                                        data-bs-content="Allows monitoring tools with the feed token to read the 10 most recent added, updated, or deleted history entries. Send the token in the X-Calendarr-Feed-Token header or use the token query parameter.">
                                         <i class="bi bi-question-circle"></i></button>
                                 </label>
                             </div>
                             <div class="form-text text-warning mt-2">
                                 <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                Anyone who can reach Calendarr can read recent event titles while this is enabled.
+                                Detailed feed entries can contain movie, show, and game titles. Treat this token like a password.
+                            </div>
+                            <div class="mt-3">
+                                <label class="form-label" for="health-feed-token">Detailed Feed Token</label>
+                                <input type="text" class="form-control font-monospace" id="health-feed-token"
+                                       value="{{.Config.HealthFeedToken}}" placeholder="Generated when detailed feed is enabled" readonly>
                             </div>
                         </div>
                     </div>
@@ -888,6 +905,8 @@ function autosaveSettingsNow() {
         .then(data => {
             if (!data.ok) throw new Error(data.message || 'Save failed');
             settingsDirty = false;
+            const feedToken = document.getElementById('health-feed-token');
+            if (feedToken && data.health_feed_token) feedToken.value = data.health_feed_token;
             setSaveStatus(data.message || 'Saved', data.restart_required ? 'warning' : 'success');
         })
         .catch(err => {
@@ -909,7 +928,7 @@ function scheduleAutosave(delay = 800) {
 
 function excludesAutosave(target) {
     return target.closest('#calendar-targets') ||
-        (target.closest('#tab-security-backup') && target.id !== 'public_health_feed');
+        (target.closest('#tab-security-backup') && !['public_health_feed', 'detailed_health_feed'].includes(target.id));
 }
 
 function autosaveSettingsOnUnload() {

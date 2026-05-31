@@ -249,7 +249,7 @@ func pruneAuthAttemptsLocked(now time.Time) {
 // authAllowlistedPath returns true for routes that bypass auth entirely.
 func authAllowlistedPath(p string) bool {
 	switch p {
-	case "/login", "/logout", "/favicon.ico", "/health":
+	case "/login", "/logout", "/favicon.ico", "/health", "/health/feed":
 		return true
 	}
 	return strings.HasPrefix(p, "/assets/")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -43,11 +44,35 @@ func apiHealth(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{
 		"ok":      true,
 		"version": appVersion,
-		"history": publicHealthHistory(loadHistory()),
 	})
 }
 
-func publicHealthHistory(entries []HistoryEntry) []HistoryEntry {
+func apiHealthFeed(w http.ResponseWriter, r *http.Request) {
+	cfg, err := loadConfig()
+	if err != nil || !cfg.DetailedHealthFeed || !validHealthFeedToken(r, cfg.HealthFeedToken) {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	jsonOK(w, map[string]interface{}{
+		"ok":      true,
+		"version": appVersion,
+		"history": detailedHealthHistory(loadHistory()),
+	})
+}
+
+func validHealthFeedToken(r *http.Request, expected string) bool {
+	token := r.Header.Get("X-Calendarr-Feed-Token")
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
+	return expected != "" && subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
+}
+
+func detailedHealthHistory(entries []HistoryEntry) []HistoryEntry {
 	const limit = 10
 	filtered := make([]HistoryEntry, 0, limit)
 	for i := len(entries) - 1; i >= 0 && len(filtered) < limit; i-- {
@@ -97,13 +122,14 @@ func apiPreview(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusConflict, "Preview already in progress.")
 		return
 	}
-	if isRunning() {
-		jsonError(w, http.StatusConflict, "A sync is running. Try again once it finishes.")
+	if op := getOperationState(); op.Active {
+		jsonError(w, http.StatusConflict, operationConflictMessage(op))
 		return
 	}
 	cfg, _ := loadConfig()
 	setPreviewRunning()
-	go func() {
+	safeGo(func() {
+		defer finishPreviewOnPanic()
 		var buf strings.Builder
 		result, err := runSync(cfg, &buf, true)
 		errMsg := ""
@@ -114,7 +140,7 @@ func apiPreview(w http.ResponseWriter, r *http.Request) {
 			result.Deleted = append(result.Deleted, simulateCleanup(cfg)...)
 		}
 		finishPreview(&result, errMsg)
-	}()
+	})
 	jsonOK(w, map[string]interface{}{"ok": true, "started": true})
 }
 
@@ -279,6 +305,10 @@ func apiRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !runSyncJob() {
+		if op := getOperationState(); op.Active {
+			jsonError(w, http.StatusConflict, operationConflictMessage(op))
+			return
+		}
 		jsonError(w, http.StatusConflict, "Already running")
 		return
 	}
@@ -316,11 +346,18 @@ func apiCleanup(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusConflict, "Cleanup already in progress.")
 		return
 	}
+	op, ok := tryBeginOperation("cleanup", "Cleanup")
+	if !ok {
+		jsonError(w, http.StatusConflict, operationConflictMessage(op))
+		return
+	}
 	setCleanupRunning()
 	cfg, _ := loadConfig()
-	go func() {
+	safeGo(func() {
+		defer finishOperation(op.ID)
+		defer finishCleanupOnPanic()
 		_, _ = runCleanup(cfg, body.Mode)
-	}()
+	})
 	jsonOK(w, map[string]interface{}{"ok": true, "started": true})
 }
 
@@ -350,12 +387,19 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusConflict, "Cleanup already in progress.")
 		return
 	}
+	op, ok := tryBeginOperation("cleanup", "Target cleanup")
+	if !ok {
+		jsonError(w, http.StatusConflict, operationConflictMessage(op))
+		return
+	}
 	setCleanupRunning()
 	cfg, _ := loadConfig()
 	calendarID := body.CalendarID
 	sources := body.Sources
 	mode := targetCleanupMode(body.Mode, sources)
 	safeGo(func() {
+		defer finishOperation(op.ID)
+		defer finishCleanupOnPanic()
 		_, scanned, deleted, err := cleanupTargetCalendar(cfg, calendarID, mode, sources)
 		if err != nil {
 			finishCleanup(false, scanned, deleted, err.Error())
@@ -364,6 +408,25 @@ func apiCleanupTarget(w http.ResponseWriter, r *http.Request) {
 		finishCleanup(true, scanned, deleted, fmt.Sprintf("Done. Scanned %d events, deleted %d.", scanned, deleted))
 	})
 	jsonOK(w, map[string]interface{}{"ok": true, "started": true})
+}
+
+func finishPreviewOnPanic() {
+	if p := recover(); p != nil {
+		if getPreviewState().Running {
+			finishPreview(&SyncResult{}, "Preview failed unexpectedly. Check the logs for details.")
+		}
+		panic(p)
+	}
+}
+
+func finishCleanupOnPanic() {
+	if p := recover(); p != nil {
+		s := getCleanupState()
+		if s.Running {
+			finishCleanup(false, s.Scanned, s.Deleted, "Cleanup failed unexpectedly. Check the logs for details.")
+		}
+		panic(p)
+	}
 }
 
 func targetCleanupMode(mode string, sources []string) string {
@@ -418,6 +481,7 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var restartRequired bool
+	var healthFeedToken string
 	err := mutateConfig(func(c *Config) error {
 		oldBind := c.WebBindAddress
 		oldPort := c.WebPort
@@ -426,6 +490,7 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("Set a Web UI password before enabling Local network access.")
 		}
 		restartRequired = oldBind != c.WebBindAddress || oldPort != c.WebPort
+		healthFeedToken = c.HealthFeedToken
 		return nil
 	})
 	if err != nil {
@@ -437,7 +502,7 @@ func apiSettingsSave(w http.ResponseWriter, r *http.Request) {
 	if restartRequired {
 		msg = "Saved. Restart the Calendarr service for Web UI access or port changes to take effect."
 	}
-	jsonOK(w, map[string]interface{}{"ok": true, "message": msg, "restart_required": restartRequired})
+	jsonOK(w, map[string]interface{}{"ok": true, "message": msg, "restart_required": restartRequired, "health_feed_token": healthFeedToken})
 }
 
 func apiCleanupStatus(w http.ResponseWriter, r *http.Request) {
@@ -463,14 +528,21 @@ func apiRestart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	op, ok := tryBeginOperation("restart", "Service restart")
+	if !ok {
+		jsonError(w, http.StatusConflict, operationConflictMessage(op))
+		return
+	}
 	adminLog("Service restart initiated", serviceName)
 	bat := dataPath("_restart.bat")
 	content := fmt.Sprintf("@echo off\r\ntimeout /t 5 /nobreak >nul\r\nnet stop \"%s\"\r\ntimeout /t 3 /nobreak >nul\r\nnet start \"%s\"\r\ndel /f /q \"%%~f0\"\r\n", serviceName, serviceName)
 	if err := os.WriteFile(bat, []byte(content), 0644); err != nil {
+		finishOperation(op.ID)
 		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("Failed to write restart script: %v", err)})
 		return
 	}
 	if err := startDetached("cmd", "/c", "start", "", "/min", bat); err != nil {
+		finishOperation(op.ID)
 		jsonOK(w, map[string]interface{}{"ok": false, "message": fmt.Sprintf("Restart failed: %v", err)})
 		return
 	}
@@ -482,6 +554,11 @@ func apiRestart(w http.ResponseWriter, r *http.Request) {
 func apiStop(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", 405)
+		return
+	}
+	op, ok := tryBeginOperation("stop", "Service stop")
+	if !ok {
+		jsonError(w, http.StatusConflict, operationConflictMessage(op))
 		return
 	}
 	adminLog("Service stop initiated via tray", "")
@@ -524,7 +601,13 @@ func apiUpdateApply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", 405)
 		return
 	}
+	op, ok := tryBeginOperation("update", "Update")
+	if !ok {
+		jsonError(w, http.StatusConflict, operationConflictMessage(op))
+		return
+	}
 	if err := downloadUpdate(); err != nil {
+		finishOperation(op.ID)
 		logEvent("[Updater] Apply failed: " + err.Error())
 		jsonOK(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return

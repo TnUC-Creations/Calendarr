@@ -175,3 +175,48 @@ func TestDownloadSignatureParsesBase64Signature(t *testing.T) {
 		t.Fatal("parsed signature did not match input")
 	}
 }
+
+func TestUpdateBatchScriptLogsExactFailedStepAndPreservesPayload(t *testing.T) {
+	script := updateBatchScript(
+		`C:\Calendarr\calendarr-update.exe`,
+		`C:\Calendarr\calendarr.exe`,
+		`C:\Data\calendarr-update.log`,
+		"Calendarr",
+	)
+
+	for _, want := range []string{
+		"if errorlevel 1 goto stop_failed",
+		"if errorlevel 1 goto copy_failed",
+		"if errorlevel 1 goto start_failed",
+		"ERROR: Failed stopping service. Payload and update script preserved.",
+		"ERROR: Failed copying new exe. Payload and update script preserved.",
+		"ERROR: Failed starting service. Payload and update script preserved.",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("update script missing failure handling %q:\n%s", want, script)
+		}
+	}
+}
+
+func TestUpdateBatchScriptDeletesPayloadOnlyAfterRestartSucceeds(t *testing.T) {
+	const payload = `C:\Calendarr\calendarr-update.exe`
+	script := updateBatchScript(
+		payload,
+		`C:\Calendarr\calendarr.exe`,
+		`C:\Data\calendarr-update.log`,
+		"Calendarr",
+	)
+
+	startCheck := strings.Index(script, "if errorlevel 1 goto start_failed")
+	deletePayload := strings.Index(script, `del /f /q "`+payload+`"`)
+	complete := strings.Index(script, "Complete.")
+	if startCheck < 0 || deletePayload < 0 || complete < 0 {
+		t.Fatalf("update script missing restart check, payload cleanup, or completion log:\n%s", script)
+	}
+	if deletePayload < startCheck {
+		t.Fatal("update script deletes payload before confirming service restart")
+	}
+	if complete < startCheck {
+		t.Fatal("update script logs completion before confirming service restart")
+	}
+}

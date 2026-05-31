@@ -11,6 +11,7 @@
                 <button type="button" class="btn btn-outline-warning" id="filter-theater" onclick="setFilter('theater')">Theater</button>
                 <button type="button" class="btn btn-outline-info" id="filter-digital" onclick="setFilter('digital')">Digital</button>
                 <button type="button" class="btn btn-outline-primary" id="filter-episode" onclick="setFilter('episode')">Episodes</button>
+                <button type="button" class="btn btn-outline-success" id="filter-steam" onclick="setFilter('steam')">Steam</button>
             </div>
         </div>
     </div>
@@ -38,7 +39,14 @@ function kindBadge(kind) {
     if (kind === 'theater') return '<span class="badge bg-warning text-dark"><i class="bi bi-camera-reels"></i> Theater</span>';
     if (kind === 'digital') return '<span class="badge bg-info text-dark"><i class="bi bi-laptop"></i> Digital</span>';
     if (kind === 'episode') return '<span class="badge bg-primary"><i class="bi bi-tv"></i> Episode</span>';
+    if (kind === 'steam') return '<span class="badge bg-success"><i class="bi bi-controller"></i> Steam</span>';
     return '<span class="badge bg-secondary">Other</span>';
+}
+
+function escapeHTML(value) {
+    const span = document.createElement('span');
+    span.textContent = String(value ?? '');
+    return span.innerHTML;
 }
 
 function localDateFromISODate(iso) {
@@ -91,13 +99,13 @@ function renderEvents() {
         const n = daysUntil(day);
         html += `<li class="list-group-item px-3 py-2" style="background:rgba(255,255,255,0.02);border-color:var(--border);">
             <div class="d-flex align-items-center gap-2">
-                <span class="fw-semibold" style="min-width:160px;">${formatDate(day)}</span>
+                <span class="fw-semibold" style="min-width:160px;">${escapeHTML(formatDate(day))}</span>
                 ${daysLabel(n)}
             </div>
         </li>`;
         groups[day].forEach(e => {
             html += `<li class="list-group-item px-4 py-2 d-flex align-items-center justify-content-between" style="border-color:var(--border);">
-                <span style="font-size:0.9rem;">${e.title}${e.calendar ? ` <span class="text-muted ms-2" style="font-size:0.78rem;"><i class="bi bi-calendar3"></i> ${e.calendar}</span>` : ''}</span>
+                <span style="font-size:0.9rem;">${escapeHTML(e.title)}${e.calendar ? ` <span class="text-muted ms-2" style="font-size:0.78rem;"><i class="bi bi-calendar3"></i> ${escapeHTML(e.calendar)}</span>` : ''}</span>
                 <span class="ms-2">${kindBadge(e.kind)}</span>
             </li>`;
         });
@@ -111,7 +119,7 @@ fetch('/api/upcoming')
     .then(data => {
         if (data.error) {
             document.getElementById('upcoming-body').innerHTML =
-                `<div class="p-4 text-danger"><i class="bi bi-exclamation-triangle"></i> ${data.error}</div>`;
+                `<div class="p-4 text-danger"><i class="bi bi-exclamation-triangle"></i> ${escapeHTML(data.error)}</div>`;
             return;
         }
         allEvents = data.events || [];
@@ -119,7 +127,7 @@ fetch('/api/upcoming')
     })
     .catch(err => {
         document.getElementById('upcoming-body').innerHTML =
-            `<div class="p-4 text-danger"><i class="bi bi-exclamation-triangle"></i> Failed to load: ${err}</div>`;
+            `<div class="p-4 text-danger"><i class="bi bi-exclamation-triangle"></i> Failed to load: ${escapeHTML(err)}</div>`;
     });
 </script>
 {{end}}

@@ -462,7 +462,7 @@ func steamAppIDFromDescription(description string) (string, bool) {
 	return match[1], true
 }
 
-func reconcileSteamWishlistEvents(calSvc *calendar.Service, calendarID string, events []*calendar.Event,
+func reconcileSteamWishlistEvents(cfg Config, calSvc *calendar.Service, calendarID string, events []*calendar.Event,
 	wishlist map[string]steamWishlistEntry, dryRun bool) ([]*calendar.Event, []string, error) {
 
 	if len(wishlist) == 0 {
@@ -473,6 +473,10 @@ func reconcileSteamWishlistEvents(calSvc *calendar.Service, calendarID string, e
 	var deleteErrs []error
 	for _, ev := range events {
 		if ev == nil {
+			kept = append(kept, ev)
+			continue
+		}
+		if cleanupEventSource(ev.Summary, ev.Description, cfg) != "steam" {
 			kept = append(kept, ev)
 			continue
 		}
@@ -561,7 +565,7 @@ func syncSteam(cfg Config, calSvc *calendar.Service, targets []CalendarTarget,
 		}
 		added, updated, removed, skippedComing, skippedVague, perGameErr := 0, 0, 0, 0, 0, 0
 
-		existingEvents, removedMessages, reconcileErr := reconcileSteamWishlistEvents(calSvc, target.ID, existingEvents, wishlist, dryRun)
+		existingEvents, removedMessages, reconcileErr := reconcileSteamWishlistEvents(cfg, calSvc, target.ID, existingEvents, wishlist, dryRun)
 		for _, msg := range removedMessages {
 			removed++
 			result.Deleted = append(result.Deleted, msg+targetLabel(target, multi))

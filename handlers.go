@@ -404,6 +404,10 @@ func applySettingsForm(cfg *Config, r *http.Request) {
 	cfg.SyncOnStart = r.FormValue("sync_on_start") != ""
 	cfg.AutoCleanupPast = r.FormValue("auto_cleanup_past") != ""
 	cfg.PublicHealthFeed = r.FormValue("public_health_feed") != ""
+	cfg.DetailedHealthFeed = r.FormValue("detailed_health_feed") != ""
+	if cfg.DetailedHealthFeed && cfg.HealthFeedToken == "" {
+		cfg.HealthFeedToken = newCSRFToken()
+	}
 	cfg.WebBindAddress = normalizeWebBindAddress(r.FormValue("web_bind_address"))
 	cfg.RadarrURL = strings.TrimSpace(r.FormValue("radarr_url"))
 	cfg.RadarrAPIKey = strings.TrimSpace(r.FormValue("radarr_api_key"))
@@ -583,7 +587,11 @@ func handleRunNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !runSyncJob() {
-		setFlash(w, "warning", "A sync is already in progress.")
+		if op := getOperationState(); op.Active {
+			setFlash(w, "warning", operationConflictMessage(op))
+		} else {
+			setFlash(w, "warning", "A sync is already in progress.")
+		}
 	} else {
 		setFlash(w, "success", "Sync started!")
 	}

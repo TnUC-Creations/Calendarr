@@ -374,30 +374,7 @@ func downloadUpdate() error {
 	// Write the swap batch file.
 	// ping replaces timeout: timeout hangs when cmd has no console (CREATE_NO_WINDOW).
 	// Each step is logged to logPath; the result appears in the daily log on restart.
-	bat := fmt.Sprintf(
-		"@echo off\r\n"+
-			"echo [%%TIME%%] Update started. >> \"%s\"\r\n"+
-			"ping 127.0.0.1 -n 6 >nul 2>&1\r\n"+
-			"echo [%%TIME%%] Stopping service: %s >> \"%s\"\r\n"+
-			"net stop \"%s\" >> \"%s\" 2>&1\r\n"+
-			"ping 127.0.0.1 -n 3 >nul 2>&1\r\n"+
-			"echo [%%TIME%%] Copying new exe... >> \"%s\"\r\n"+
-			"copy /y \"%s\" \"%s\" >> \"%s\" 2>&1\r\n"+
-			"del /f /q \"%s\"\r\n"+
-			"echo [%%TIME%%] Starting service: %s >> \"%s\"\r\n"+
-			"net start \"%s\" >> \"%s\" 2>&1\r\n"+
-			"echo [%%TIME%%] Complete. >> \"%s\"\r\n"+
-			"del /f /q \"%%~f0\"\r\n",
-		logPath,
-		serviceName, logPath,
-		serviceName, logPath,
-		logPath,
-		updatePath, exePath, logPath,
-		updatePath,
-		serviceName, logPath,
-		serviceName, logPath,
-		logPath,
-	)
+	bat := updateBatchScript(updatePath, exePath, logPath, serviceName)
 	if err := os.WriteFile(batPath, []byte(bat), 0644); err != nil {
 		os.Remove(updatePath)
 		return fmt.Errorf("cannot write update script: %w", err)
@@ -414,6 +391,49 @@ func downloadUpdate() error {
 	logEvent(fmt.Sprintf("[Updater] Script launched — stopping %s, swapping exe, restarting", serviceName))
 
 	return nil
+}
+
+func updateBatchScript(updatePath, exePath, logPath, serviceName string) string {
+	return fmt.Sprintf(
+		"@echo off\r\n"+
+			"echo [%%TIME%%] Update started. >> \"%s\"\r\n"+
+			"ping 127.0.0.1 -n 6 >nul 2>&1\r\n"+
+			"echo [%%TIME%%] Stopping service: %s >> \"%s\"\r\n"+
+			"net stop \"%s\" >> \"%s\" 2>&1\r\n"+
+			"if errorlevel 1 goto stop_failed\r\n"+
+			"ping 127.0.0.1 -n 3 >nul 2>&1\r\n"+
+			"echo [%%TIME%%] Copying new exe... >> \"%s\"\r\n"+
+			"copy /y \"%s\" \"%s\" >> \"%s\" 2>&1\r\n"+
+			"if errorlevel 1 goto copy_failed\r\n"+
+			"echo [%%TIME%%] Starting service: %s >> \"%s\"\r\n"+
+			"net start \"%s\" >> \"%s\" 2>&1\r\n"+
+			"if errorlevel 1 goto start_failed\r\n"+
+			"del /f /q \"%s\"\r\n"+
+			"echo [%%TIME%%] Complete. >> \"%s\"\r\n"+
+			"del /f /q \"%%~f0\"\r\n"+
+			"exit /b 0\r\n"+
+			":stop_failed\r\n"+
+			"echo [%%TIME%%] ERROR: Failed stopping service. Payload and update script preserved. >> \"%s\"\r\n"+
+			"exit /b 1\r\n"+
+			":copy_failed\r\n"+
+			"echo [%%TIME%%] ERROR: Failed copying new exe. Payload and update script preserved. >> \"%s\"\r\n"+
+			"exit /b 1\r\n"+
+			":start_failed\r\n"+
+			"echo [%%TIME%%] ERROR: Failed starting service. Payload and update script preserved. >> \"%s\"\r\n"+
+			"exit /b 1\r\n",
+		logPath,
+		serviceName, logPath,
+		serviceName, logPath,
+		logPath,
+		updatePath, exePath, logPath,
+		serviceName, logPath,
+		serviceName, logPath,
+		updatePath,
+		logPath,
+		logPath,
+		logPath,
+		logPath,
+	)
 }
 
 func downloadSignature(url string) ([]byte, error) {

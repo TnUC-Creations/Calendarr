@@ -942,15 +942,16 @@ func TestReconcileSteamWishlistEventsDryRunRemovesOnlyStaleSteamEvents(t *testin
 		{Id: "keep", Summary: "Keep - Steam Release", Description: "Steam App ID: 100"},
 		{Id: "remove", Summary: "Remove - Steam Release", Description: "Steam App ID: 200"},
 		{Id: "personal", Summary: "Personal", Description: "Do not touch"},
+		{Id: "manual-marker", Summary: "Personal note", Description: "Steam App ID: 200"},
 	}
 	wishlist := map[string]steamWishlistEntry{"100": {}}
 
-	kept, deleted, err := reconcileSteamWishlistEvents(nil, "calendar", events, wishlist, true)
+	kept, deleted, err := reconcileSteamWishlistEvents(defaultConfig(), nil, "calendar", events, wishlist, true)
 
 	if err != nil {
 		t.Fatalf("reconcileSteamWishlistEvents: %v", err)
 	}
-	if len(kept) != 2 || kept[0].Id != "keep" || kept[1].Id != "personal" {
+	if len(kept) != 3 || kept[0].Id != "keep" || kept[1].Id != "personal" || kept[2].Id != "manual-marker" {
 		t.Fatalf("kept = %#v, want wishlisted and personal events", kept)
 	}
 	if len(deleted) != 1 || deleted[0] != "Remove - Steam Release removed from calendar" {
@@ -963,7 +964,7 @@ func TestReconcileSteamWishlistEventsPreservesEventsForEmptyWishlist(t *testing.
 		{Id: "keep", Summary: "Keep - Steam Release", Description: "Steam App ID: 100"},
 	}
 
-	kept, deleted, err := reconcileSteamWishlistEvents(nil, "calendar", events, nil, true)
+	kept, deleted, err := reconcileSteamWishlistEvents(defaultConfig(), nil, "calendar", events, nil, true)
 
 	if err != nil {
 		t.Fatalf("reconcileSteamWishlistEvents: %v", err)
@@ -993,7 +994,7 @@ func TestReconcileSteamWishlistEventsDeletesStaleCalendarEvent(t *testing.T) {
 	}
 	wishlist := map[string]steamWishlistEntry{"100": {}}
 
-	kept, deleted, err := reconcileSteamWishlistEvents(calSvc, "steam-calendar", events, wishlist, false)
+	kept, deleted, err := reconcileSteamWishlistEvents(defaultConfig(), calSvc, "steam-calendar", events, wishlist, false)
 
 	if err != nil {
 		t.Fatalf("reconcileSteamWishlistEvents: %v", err)

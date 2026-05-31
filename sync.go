@@ -48,6 +48,18 @@ func fmtEpisodeTitle(tmpl, title string, season, episode int) string {
 	return r
 }
 
+func sonarrSummaryMatchesShow(summary, title, tmpl string) bool {
+	if !strings.Contains(tmpl, "{title}") {
+		return false
+	}
+	pattern := regexp.QuoteMeta(tmpl)
+	pattern = strings.ReplaceAll(pattern, regexp.QuoteMeta("{title}"), regexp.QuoteMeta(title))
+	pattern = strings.ReplaceAll(pattern, regexp.QuoteMeta("{season:02d}"), `\d+`)
+	pattern = strings.ReplaceAll(pattern, regexp.QuoteMeta("{episode:02d}"), `\d+`)
+	matched, err := regexp.MatchString("^"+pattern+"$", summary)
+	return err == nil && matched
+}
+
 func localDateFromAPI(dateStr string) (string, bool) {
 	dateStr = strings.TrimSpace(dateStr)
 	if dateStr == "" {
@@ -519,7 +531,7 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 		fmt.Fprintf(w, "[Sync] Newly ignored this run (%d): %s\n", len(newlyIgnored), compactNames(newTitles, 10, len(newTitles)))
 	}
 
-	// deleteShowEvents removes all calendar events whose summary starts with title.
+	// deleteShowEvents removes generated Sonarr events for an ignored show.
 	// Returns the number of events deleted. Only logs when events are actually removed.
 	deleteShowEvents := func(title string) (int, error) {
 		removedCount := 0
@@ -537,7 +549,8 @@ func runSync(cfg Config, w io.Writer, dryRun bool) (SyncResult, error) {
 					return removedCount, fmt.Errorf("cleanup list events for %q on %s: %w", title, target.ID, err)
 				}
 				for _, ev := range res.Items {
-					if strings.HasPrefix(ev.Summary, title) {
+					if cleanupEventSource(ev.Summary, ev.Description, cfg) == "sonarr" &&
+						sonarrSummaryMatchesShow(ev.Summary, title, cfg.EpisodeTemplate) {
 						ok := dryRun
 						if !dryRun {
 							if err := calSvc.Events.Delete(target.ID, ev.Id).Do(); err != nil {

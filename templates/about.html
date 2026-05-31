@@ -314,6 +314,19 @@
     <div class="card-body p-0">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-primary px-2">v1.12.0</span>
+                <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
+            </div>
+            <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
+                <li>Sync, cleanup, preview, restart, and update actions now avoid running over each other.</li>
+                <li>Steam wishlist cleanup and ignored show cleanup are more careful about which calendar events they remove.</li>
+                <li>Upcoming Releases now includes a Steam filter and safely displays calendar event text.</li>
+                <li>The public health check now exposes only app status and version. Recent changes are available through a separate token-protected feed.</li>
+                <li>In-app updates now report the failed step and preserve recovery files when service restart or file replacement fails.</li>
+            </ul>
+        </div>
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
+            <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-primary px-2">v1.11.3</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
@@ -359,9 +372,15 @@
                 <li>Use a public Steam64 ID or a steamcommunity.com/profiles/ URL; vanity profile URLs are not supported.</li>
             </ul>
         </div>
+        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
+                <i class="bi bi-chevron-down me-1"></i>Show older versions
+            </button>
+        </div>
+        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="badge bg-primary px-2">v1.10.1</span>
+                <span class="badge bg-secondary px-2">v1.10.1</span>
                 <span class="text-muted" style="font-size:0.8rem;">May 2026</span>
             </div>
             <ul class="mb-0 ps-3" style="font-size:0.88rem; color:var(--text);">
@@ -371,12 +390,6 @@
                 <li>Google Calendar approval now returns to Calendar settings and closes the approval tab when the browser allows it.</li>
             </ul>
         </div>
-        <div class="p-2 text-center" style="border-top:1px solid var(--border);">
-            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#older-changelog" aria-expanded="false" id="older-changelog-btn">
-                <i class="bi bi-chevron-down me-1"></i>Show older versions
-            </button>
-        </div>
-        <div class="collapse" id="older-changelog">
         <div class="p-3 border-bottom" style="border-color:var(--border) !important;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge bg-secondary px-2">v1.10.0</span>

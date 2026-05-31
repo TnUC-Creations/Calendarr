@@ -94,10 +94,12 @@ type Config struct {
 	MovieDigitalTemplate string `json:"movie_digital_template"`
 	EpisodeTemplate      string `json:"episode_template"`
 
-	MaxLogFiles       int  `json:"max_log_files"`
-	MaxHistoryEntries int  `json:"max_history_entries"`
-	AutoCleanupPast   bool `json:"auto_cleanup_past"`
-	PublicHealthFeed  bool `json:"public_health_feed"`
+	MaxLogFiles        int    `json:"max_log_files"`
+	MaxHistoryEntries  int    `json:"max_history_entries"`
+	AutoCleanupPast    bool   `json:"auto_cleanup_past"`
+	PublicHealthFeed   bool   `json:"public_health_feed"`
+	DetailedHealthFeed bool   `json:"detailed_health_feed"`
+	HealthFeedToken    string `json:"health_feed_token"`
 
 	WebUIPasswordHash string `json:"web_ui_password_hash"`
 }

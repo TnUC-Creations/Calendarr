@@ -226,3 +226,17 @@ func TestAllDayEventNeedsUpdateDetectsColorChange(t *testing.T) {
 		t.Fatal("expected changed color to require update")
 	}
 }
+
+func TestSonarrSummaryMatchesShowRejectsPrefixCollision(t *testing.T) {
+	const tmpl = "{title} S{season:02d}E{episode:02d}"
+
+	if !sonarrSummaryMatchesShow("Lost S01E02", "Lost", tmpl) {
+		t.Fatal("expected generated Lost episode to match")
+	}
+	if sonarrSummaryMatchesShow("Lost in Space S01E02", "Lost", tmpl) {
+		t.Fatal("prefix collision must not match ignored show")
+	}
+	if sonarrSummaryMatchesShow("Lost S01E02 notes", "Lost", tmpl) {
+		t.Fatal("non-generated suffix must not match ignored show")
+	}
+}

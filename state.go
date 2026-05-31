@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,7 +16,7 @@ type SyncStats struct {
 // RunChange pairs an action type with a human-readable message so the
 // dashboard can render the correct icon and color per entry.
 type RunChange struct {
-	Action  string `json:"action"`  // "added", "updated", "deleted"
+	Action  string `json:"action"` // "added", "updated", "deleted"
 	Message string `json:"message"`
 }
 
@@ -28,13 +29,14 @@ type AppState struct {
 	LastRunStats   SyncStats
 	NextRun        *time.Time
 	SyncProgress   string // current activity shown while IsRunning == true
+	operationID    int64
 }
 
 // CleanupState tracks the background cleanup worker, protected by cleanupMu.
 type CleanupState struct {
 	Running bool
 	Done    bool
-	Ok      *bool  // nil = not finished, true = success, false = error
+	Ok      *bool // nil = not finished, true = success, false = error
 	Deleted int
 	Scanned int
 	Message string
@@ -49,6 +51,15 @@ type PreviewState struct {
 	Progress string
 }
 
+// OperationState tracks the one write/interrupt operation allowed at a time.
+type OperationState struct {
+	Active    bool
+	ID        int64
+	Kind      string
+	Label     string
+	StartedAt time.Time
+}
+
 var (
 	appState AppState = AppState{LastRunStatus: "Never run"}
 	stateMu  sync.RWMutex
@@ -58,6 +69,10 @@ var (
 
 	previewState PreviewState
 	previewMu    sync.Mutex
+
+	operationState  OperationState
+	operationMu     sync.Mutex
+	nextOperationID int64
 )
 
 // ---- App state helpers -------------------------------------------------------
@@ -81,17 +96,65 @@ func isRunning() bool {
 	return appState.IsRunning
 }
 
+func getOperationState() OperationState {
+	operationMu.Lock()
+	defer operationMu.Unlock()
+	return operationState
+}
+
+func tryBeginOperation(kind, label string) (OperationState, bool) {
+	operationMu.Lock()
+	defer operationMu.Unlock()
+	if operationState.Active {
+		return operationState, false
+	}
+	nextOperationID++
+	operationState = OperationState{
+		Active:    true,
+		ID:        nextOperationID,
+		Kind:      kind,
+		Label:     label,
+		StartedAt: time.Now(),
+	}
+	return operationState, true
+}
+
+func finishOperation(id int64) {
+	if id == 0 {
+		return
+	}
+	operationMu.Lock()
+	defer operationMu.Unlock()
+	if operationState.Active && operationState.ID == id {
+		operationState = OperationState{}
+	}
+}
+
+func operationConflictMessage(op OperationState) string {
+	label := strings.TrimSpace(op.Label)
+	if label == "" {
+		label = "Another operation"
+	}
+	return label + " is already in progress. Try again once it finishes."
+}
+
 // tryStartRun atomically claims the running flag. Returns true if the caller
 // successfully became the active sync; false if a sync was already in progress.
 // Pairs with finishRun (which clears IsRunning) to prevent two syncs from
 // starting from a check-then-set race.
 func tryStartRun() bool {
+	op, ok := tryBeginOperation("sync", "Sync")
+	if !ok {
+		return false
+	}
 	stateMu.Lock()
 	defer stateMu.Unlock()
 	if appState.IsRunning {
+		finishOperation(op.ID)
 		return false
 	}
 	appState.IsRunning = true
+	appState.operationID = op.ID
 	return true
 }
 
@@ -109,13 +172,16 @@ func setSyncProgress(msg string) {
 
 func finishRun(runTime time.Time, status string, changes []RunChange, stats SyncStats) {
 	stateMu.Lock()
+	opID := appState.operationID
 	appState.LastRun = &runTime
 	appState.LastRunStatus = status
 	appState.LastRunChanges = changes
 	appState.LastRunStats = stats
 	appState.IsRunning = false
 	appState.SyncProgress = ""
+	appState.operationID = 0
 	stateMu.Unlock()
+	finishOperation(opID)
 }
 
 // ---- Cleanup state helpers --------------------------------------------------

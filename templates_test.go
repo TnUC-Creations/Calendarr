@@ -45,7 +45,7 @@ func TestSettingsTemplateRendersPublicHealthFeedToggle(t *testing.T) {
 			CSRFToken:   "test-token",
 			CurrentPage: "settings",
 		},
-		Config: Config{PublicHealthFeed: true},
+		Config: Config{PublicHealthFeed: true, DetailedHealthFeed: true, HealthFeedToken: "feed-token"},
 	}
 	if err := pageTemplates["settings"].ExecuteTemplate(&out, "layout", data); err != nil {
 		t.Fatal(err)
@@ -54,8 +54,14 @@ func TestSettingsTemplateRendersPublicHealthFeedToggle(t *testing.T) {
 	if !strings.Contains(html, `name="public_health_feed"`) || !strings.Contains(html, `id="public_health_feed"`) {
 		t.Fatal("settings template did not render public health feed toggle")
 	}
-	if !strings.Contains(html, `Anyone who can reach Calendarr can read recent event titles`) {
-		t.Fatal("settings template should explain the public health feed risk")
+	if !strings.Contains(html, `name="detailed_health_feed"`) || !strings.Contains(html, `id="detailed_health_feed"`) {
+		t.Fatal("settings template did not render detailed health feed toggle")
+	}
+	if !strings.Contains(html, `Detailed feed entries can contain movie, show, and game titles`) {
+		t.Fatal("settings template should explain the detailed health feed risk")
+	}
+	if !strings.Contains(html, `value="feed-token"`) {
+		t.Fatal("settings template should render the authenticated detailed feed token")
 	}
 }
 
@@ -65,8 +71,26 @@ func TestSettingsTemplateAutosavesPublicHealthFeedToggle(t *testing.T) {
 		t.Fatalf("read settings template: %v", err)
 	}
 	html := string(src)
-	if !strings.Contains(html, `(target.closest('#tab-security-backup') && target.id !== 'public_health_feed')`) {
-		t.Fatal("Security & Backup autosave exception should allow public_health_feed changes")
+	if !strings.Contains(html, `!['public_health_feed', 'detailed_health_feed'].includes(target.id)`) {
+		t.Fatal("Security & Backup autosave exception should allow health feed changes")
+	}
+}
+
+func TestSettingsTemplateUnloadAutosaveIncludesCSRFFormField(t *testing.T) {
+	src, err := os.ReadFile("templates/settings.html")
+	if err != nil {
+		t.Fatalf("read settings template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`<form method="post" action="/settings" id="settings-form" novalidate>`,
+		`<input type="hidden" name="_csrf" value="{{.CSRFToken}}">`,
+		`const body = new URLSearchParams(new FormData(settingsForm)).toString();`,
+		`navigator.sendBeacon('/api/settings/save', blob);`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("settings unload autosave missing CSRF-safe form submission wiring %q", want)
+		}
 	}
 }
 
@@ -216,6 +240,37 @@ func TestDashboardScheduleShowsSteamBadge(t *testing.T) {
 	html := out.String()
 	if !strings.Contains(html, `<span class="badge bg-success">Steam</span>`) {
 		t.Fatal("dashboard schedule should show a Steam badge when Steam is enabled")
+	}
+}
+
+func TestUpcomingTemplateSupportsSteamAndEscapesAPIText(t *testing.T) {
+	src, err := os.ReadFile("templates/upcoming.html")
+	if err != nil {
+		t.Fatalf("read upcoming template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`id="filter-steam"`,
+		`onclick="setFilter('steam')"`,
+		`if (kind === 'steam')`,
+		`${escapeHTML(e.title)}`,
+		`${escapeHTML(e.calendar)}`,
+		`${escapeHTML(data.error)}`,
+		`${escapeHTML(err)}`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("upcoming template missing safe Steam rendering %q", want)
+		}
+	}
+	for _, blocked := range []string{
+		`${e.title}`,
+		`${e.calendar}`,
+		`${data.error}`,
+		`Failed to load: ${err}`,
+	} {
+		if strings.Contains(html, blocked) {
+			t.Fatalf("upcoming template renders API text without escaping: %q", blocked)
+		}
 	}
 }
 

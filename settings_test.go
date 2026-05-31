@@ -80,6 +80,46 @@ func TestApplySettingsFormPersistsPublicHealthFeed(t *testing.T) {
 	}
 }
 
+func TestApplySettingsFormGeneratesDetailedHealthFeedToken(t *testing.T) {
+	cfg := defaultConfig()
+	form := url.Values{
+		"detailed_health_feed": {"on"},
+	}
+	req := httptest.NewRequest("POST", "/api/settings/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := parseSettingsRequest(req); err != nil {
+		t.Fatalf("parseSettingsRequest: %v", err)
+	}
+
+	applySettingsForm(&cfg, req)
+
+	if !cfg.DetailedHealthFeed {
+		t.Fatal("DetailedHealthFeed = false, want true")
+	}
+	if cfg.HealthFeedToken == "" {
+		t.Fatal("HealthFeedToken is empty, want generated token")
+	}
+}
+
+func TestApplySettingsFormRetainsDetailedHealthFeedToken(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.HealthFeedToken = "existing-token"
+	form := url.Values{
+		"detailed_health_feed": {"on"},
+	}
+	req := httptest.NewRequest("POST", "/api/settings/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := parseSettingsRequest(req); err != nil {
+		t.Fatalf("parseSettingsRequest: %v", err)
+	}
+
+	applySettingsForm(&cfg, req)
+
+	if cfg.HealthFeedToken != "existing-token" {
+		t.Fatalf("HealthFeedToken = %q, want retained token", cfg.HealthFeedToken)
+	}
+}
+
 func TestApplySettingsFormIgnoresLegacySteamAPIKey(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SteamAPIKey = "old-key"
