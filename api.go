@@ -110,6 +110,43 @@ func apiStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type sourceHealthItem struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Enabled bool   `json:"enabled"`
+}
+
+func apiSourceHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	cfg, _ := loadConfig()
+	jsonOK(w, map[string]interface{}{"sources": sourceHealthItems(cfg)})
+}
+
+func sourceHealthItems(cfg Config) []sourceHealthItem {
+	targets := calendarTargets(cfg)
+	return []sourceHealthItem{
+		configSourceHealth("Radarr", cfg.UseRadarr, cfg.RadarrURL != "" && cfg.RadarrAPIKey != "", "Configured", "Missing URL or API key."),
+		configSourceHealth("Sonarr", cfg.UseSonarr, cfg.SonarrURL != "" && cfg.SonarrAPIKey != "", "Configured", "Missing URL or API key."),
+		configSourceHealth("Steam", cfg.UseSteam, strings.TrimSpace(cfg.SteamID) != "", "Configured", "Missing Steam ID."),
+		configSourceHealth("Google Calendar", true, cfg.GoogleRefreshToken != "" && len(targets) > 0, fmt.Sprintf("Connected to %d calendar target(s).", len(targets)), "Not connected."),
+		configSourceHealth("Pushover", cfg.UsePushover, cfg.PushoverToken != "" && cfg.PushoverUser != "", "Configured", "Missing app token or user key."),
+	}
+}
+
+func configSourceHealth(name string, enabled, configured bool, okMessage, warningMessage string) sourceHealthItem {
+	if !enabled {
+		return sourceHealthItem{Name: name, Status: "disabled", Message: "Disabled", Enabled: false}
+	}
+	if !configured {
+		return sourceHealthItem{Name: name, Status: "warning", Message: warningMessage, Enabled: true}
+	}
+	return sourceHealthItem{Name: name, Status: "ok", Message: okMessage, Enabled: true}
+}
+
 // ---- /api/preview -----------------------------------------------------------
 
 func apiPreview(w http.ResponseWriter, r *http.Request) {

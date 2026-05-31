@@ -164,6 +164,71 @@ func TestDetailedHealthHistoryReturnsNewestTenChanges(t *testing.T) {
 	}
 }
 
+func TestSourceHealthItemsReflectConfigurationState(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.UseRadarr = true
+	cfg.RadarrURL = "http://radarr/api/v3"
+	cfg.RadarrAPIKey = "radarr-key"
+	cfg.UseSonarr = true
+	cfg.SonarrURL = ""
+	cfg.SonarrAPIKey = ""
+	cfg.UseSteam = true
+	cfg.SteamID = "76561198000000001"
+	cfg.GoogleRefreshToken = "refresh-token"
+	cfg.CalendarTargets = []CalendarTarget{{ID: "primary", RadarrEnabled: true, SonarrEnabled: true, SteamEnabled: true}}
+	cfg.UsePushover = false
+
+	items := sourceHealthItems(cfg)
+	byName := make(map[string]sourceHealthItem, len(items))
+	for _, item := range items {
+		byName[item.Name] = item
+	}
+
+	if byName["Radarr"].Status != "ok" {
+		t.Fatalf("Radarr status = %#v, want ok", byName["Radarr"])
+	}
+	if byName["Sonarr"].Status != "warning" {
+		t.Fatalf("Sonarr status = %#v, want warning", byName["Sonarr"])
+	}
+	if byName["Steam"].Status != "ok" {
+		t.Fatalf("Steam status = %#v, want ok", byName["Steam"])
+	}
+	if byName["Google Calendar"].Status != "ok" {
+		t.Fatalf("Google Calendar status = %#v, want ok", byName["Google Calendar"])
+	}
+	if byName["Pushover"].Status != "disabled" {
+		t.Fatalf("Pushover status = %#v, want disabled", byName["Pushover"])
+	}
+}
+
+func TestAPISourceHealthReturnsSources(t *testing.T) {
+	oldDataDir := dataDir
+	dataDir = t.TempDir()
+	t.Cleanup(func() { dataDir = oldDataDir })
+	cfg := defaultConfig()
+	cfg.UseRadarr = false
+	if err := saveConfig(cfg); err != nil {
+		t.Fatalf("saveConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/source-health", nil)
+	rec := httptest.NewRecorder()
+	apiSourceHealth(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var body struct {
+		Sources []sourceHealthItem `json:"sources"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Sources) != 5 {
+		t.Fatalf("sources = %#v, want five source health items", body.Sources)
+	}
+}
+
 func TestAPITestRadarrRejectsMalformedJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/test/radarr", strings.NewReader("{"))
 	rec := httptest.NewRecorder()

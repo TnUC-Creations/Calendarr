@@ -730,8 +730,17 @@
                             </div>
                             <div class="mt-3">
                                 <label class="form-label" for="health-feed-token">Detailed Feed Token</label>
-                                <input type="text" class="form-control font-monospace" id="health-feed-token"
-                                       value="{{.Config.HealthFeedToken}}" placeholder="Generated when detailed feed is enabled" readonly>
+                                <div class="input-group">
+                                    <input type="text" class="form-control font-monospace" id="health-feed-token"
+                                           value="{{.Config.HealthFeedToken}}" placeholder="Generated when detailed feed is enabled" readonly>
+                                    <button type="button" class="btn btn-outline-secondary" id="health-feed-copy-btn" onclick="copyHealthFeedToken()" title="Copy token">
+                                        <i class="bi bi-clipboard"></i> Copy
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info" id="health-feed-test-btn" onclick="testHealthFeed()" title="Test detailed feed">
+                                        <i class="bi bi-heart-pulse"></i> Test
+                                    </button>
+                                </div>
+                                <div id="health-feed-status" class="form-text mt-2" style="min-height:1.2rem;"></div>
                             </div>
                         </div>
                     </div>
@@ -929,6 +938,72 @@ function scheduleAutosave(delay = 800) {
 function excludesAutosave(target) {
     return target.closest('#calendar-targets') ||
         (target.closest('#tab-security-backup') && !['public_health_feed', 'detailed_health_feed'].includes(target.id));
+}
+
+function setHealthFeedStatus(text, kind = 'muted') {
+    const el = document.getElementById('health-feed-status');
+    if (!el) return;
+    el.textContent = text;
+    el.className = `form-text mt-2 text-${kind}`;
+}
+
+async function currentHealthFeedToken() {
+    const enabled = document.getElementById('detailed_health_feed')?.checked;
+    if (!enabled) {
+        setHealthFeedStatus('Enable detailed feed first.', 'warning');
+        return '';
+    }
+    if (settingsSaving) {
+        setHealthFeedStatus('Wait for the current save to finish.', 'warning');
+        return '';
+    }
+    if (settingsDirty) {
+        setHealthFeedStatus('Saving health feed settings...', 'muted');
+        await autosaveSettingsNow();
+    }
+    const token = (document.getElementById('health-feed-token')?.value || '').trim();
+    if (!token) {
+        setHealthFeedStatus('Save settings to generate a feed token.', 'warning');
+        return '';
+    }
+    return token;
+}
+
+async function copyHealthFeedToken() {
+    const token = await currentHealthFeedToken();
+    if (!token) return;
+    try {
+        await navigator.clipboard.writeText(token);
+        setHealthFeedStatus('Token copied.', 'success');
+    } catch (err) {
+        const input = document.getElementById('health-feed-token');
+        input?.select();
+        document.execCommand('copy');
+        input?.blur();
+        setHealthFeedStatus('Token copied.', 'success');
+    }
+}
+
+async function testHealthFeed() {
+    const token = await currentHealthFeedToken();
+    if (!token) return;
+    setHealthFeedStatus('Testing detailed feed...', 'muted');
+    try {
+        const res = await fetch('/health/feed', {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {'X-Calendarr-Feed-Token': token},
+        });
+        if (!res.ok) {
+            setHealthFeedStatus(res.status === 404 ? 'Detailed feed is disabled or the token is invalid.' : `Feed test failed (${res.status}).`, 'danger');
+            return;
+        }
+        const data = await res.json();
+        const count = Array.isArray(data.history) ? data.history.length : 0;
+        setHealthFeedStatus(`Feed test passed (${count} recent entries).`, 'success');
+    } catch (err) {
+        setHealthFeedStatus('Feed test failed. Check that Calendarr is reachable.', 'danger');
+    }
 }
 
 function autosaveSettingsOnUnload() {

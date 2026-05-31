@@ -122,21 +122,33 @@ func render(w http.ResponseWriter, name string, data interface{}) {
 
 type DashboardData struct {
 	PageBase
-	IsRunning      bool
-	LastRunStr     string
-	NextRunStr     string
-	LastRunStatus  string
-	StatusDotClass string
-	LastRunChanges []RunChange
-	Added          int
-	Updated        int
-	Deleted        int
-	SyncProgress   string
-	Config         Config
-	RadarrAppURL   string
-	SonarrAppURL   string
-	TheaterSuffix  string
-	DigitalSuffix  string
+	IsRunning              bool
+	LastRunStr             string
+	NextRunStr             string
+	LastRunStatus          string
+	StatusDotClass         string
+	LastRunChanges         []RunChange
+	Added                  int
+	Updated                int
+	Deleted                int
+	SyncProgress           string
+	Config                 Config
+	RadarrAppURL           string
+	SonarrAppURL           string
+	TheaterSuffix          string
+	DigitalSuffix          string
+	SetupChecklist         []SetupChecklistItem
+	SetupChecklistComplete bool
+	SetupChecklistDone     int
+	SetupChecklistRequired int
+}
+
+type SetupChecklistItem struct {
+	Label    string
+	Detail   string
+	Done     bool
+	Optional bool
+	Href     string
 }
 
 type HistoryData struct {
@@ -265,6 +277,38 @@ func serviceAppURL(raw string) string {
 	return u.String()
 }
 
+func setupChecklist(cfg Config) ([]SetupChecklistItem, bool, int, int) {
+	targets := calendarTargets(cfg)
+	sourceConfigured := false
+	for _, item := range sourceHealthItems(cfg) {
+		if item.Name == "Radarr" || item.Name == "Sonarr" || item.Name == "Steam" {
+			if item.Status == "ok" {
+				sourceConfigured = true
+				break
+			}
+		}
+	}
+	items := []SetupChecklistItem{
+		{Label: "Connect Google Calendar", Detail: "Required for calendar writes.", Done: cfg.GoogleRefreshToken != "", Href: "/settings#calendar"},
+		{Label: "Configure at least one source", Detail: "Radarr, Sonarr, or Steam must be ready.", Done: sourceConfigured, Href: "/settings#media"},
+		{Label: "Select a calendar target", Detail: "Choose where Calendarr should create events.", Done: len(targets) > 0, Href: "/settings#calendar"},
+		{Label: "Set up Pushover", Detail: "Optional sync notifications.", Done: cfg.UsePushover && cfg.PushoverToken != "" && cfg.PushoverUser != "", Optional: true, Href: "/settings#pushover"},
+		{Label: "Set a Web UI password", Detail: "Recommended before using local network access.", Done: cfg.WebUIPasswordHash != "", Optional: true, Href: "/settings#security-backup"},
+		{Label: "Enable health monitoring", Detail: "Optional dashboard monitoring endpoint.", Done: cfg.PublicHealthFeed || cfg.DetailedHealthFeed, Optional: true, Href: "/settings#security-backup"},
+	}
+	required, done := 0, 0
+	for _, item := range items {
+		if item.Optional {
+			continue
+		}
+		required++
+		if item.Done {
+			done++
+		}
+	}
+	return items, done == required, done, required
+}
+
 // ---- Log file helpers -------------------------------------------------------
 
 // listLogFiles returns all daily log files in logsDir, newest first.
@@ -297,23 +341,28 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	s := getAppState()
 	cfg, _ := loadConfig()
+	checklist, checklistComplete, checklistDone, checklistRequired := setupChecklist(cfg)
 	data := DashboardData{
-		PageBase:       newBase("dashboard", r, w),
-		IsRunning:      s.IsRunning,
-		LastRunStr:     fmtTime(s.LastRun, "—"),
-		NextRunStr:     fmtTime(s.NextRun, "Starting soon..."),
-		LastRunStatus:  s.LastRunStatus,
-		StatusDotClass: statusDotClass(s.LastRunStatus),
-		LastRunChanges: s.LastRunChanges,
-		Added:          s.LastRunStats.Added,
-		Updated:        s.LastRunStats.Updated,
-		Deleted:        s.LastRunStats.Deleted,
-		SyncProgress:   s.SyncProgress,
-		Config:         cfg,
-		RadarrAppURL:   serviceAppURL(cfg.RadarrURL),
-		SonarrAppURL:   serviceAppURL(cfg.SonarrURL),
-		TheaterSuffix:  templateSuffix(cfg.MovieTheaterTemplate),
-		DigitalSuffix:  templateSuffix(cfg.MovieDigitalTemplate),
+		PageBase:               newBase("dashboard", r, w),
+		IsRunning:              s.IsRunning,
+		LastRunStr:             fmtTime(s.LastRun, "—"),
+		NextRunStr:             fmtTime(s.NextRun, "Starting soon..."),
+		LastRunStatus:          s.LastRunStatus,
+		StatusDotClass:         statusDotClass(s.LastRunStatus),
+		LastRunChanges:         s.LastRunChanges,
+		Added:                  s.LastRunStats.Added,
+		Updated:                s.LastRunStats.Updated,
+		Deleted:                s.LastRunStats.Deleted,
+		SyncProgress:           s.SyncProgress,
+		Config:                 cfg,
+		RadarrAppURL:           serviceAppURL(cfg.RadarrURL),
+		SonarrAppURL:           serviceAppURL(cfg.SonarrURL),
+		TheaterSuffix:          templateSuffix(cfg.MovieTheaterTemplate),
+		DigitalSuffix:          templateSuffix(cfg.MovieDigitalTemplate),
+		SetupChecklist:         checklist,
+		SetupChecklistComplete: checklistComplete,
+		SetupChecklistDone:     checklistDone,
+		SetupChecklistRequired: checklistRequired,
 	}
 	render(w, "dashboard", data)
 }

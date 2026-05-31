@@ -65,6 +65,30 @@ func TestSettingsTemplateRendersPublicHealthFeedToggle(t *testing.T) {
 	}
 }
 
+func TestSettingsTemplateRendersHealthFeedCopyAndTestControls(t *testing.T) {
+	src, err := os.ReadFile("templates/settings.html")
+	if err != nil {
+		t.Fatalf("read settings template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`id="health-feed-copy-btn"`,
+		`onclick="copyHealthFeedToken()"`,
+		`id="health-feed-test-btn"`,
+		`onclick="testHealthFeed()"`,
+		`id="health-feed-status"`,
+		`headers: {'X-Calendarr-Feed-Token': token}`,
+		`fetch('/health/feed'`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("settings template missing health feed control wiring %q", want)
+		}
+	}
+	if strings.Contains(html, `/health/feed?token`) {
+		t.Fatal("settings feed test should not put the token in the URL")
+	}
+}
+
 func TestSettingsTemplateAutosavesPublicHealthFeedToggle(t *testing.T) {
 	src, err := os.ReadFile("templates/settings.html")
 	if err != nil {
@@ -243,6 +267,121 @@ func TestDashboardScheduleShowsSteamBadge(t *testing.T) {
 	}
 }
 
+func TestDashboardTemplateRendersSourceHealthCards(t *testing.T) {
+	src, err := os.ReadFile("templates/dashboard.html")
+	if err != nil {
+		t.Fatalf("read dashboard template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`id="source-health-body"`,
+		`id="source-health-refresh"`,
+		`fetch('/api/source-health')`,
+		`function renderSourceHealth`,
+		`${escHtml(source.name)}`,
+		`${escHtml(source.message)}`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("dashboard template missing source health wiring %q", want)
+		}
+	}
+}
+
+func TestSetupChecklistTracksRequiredItems(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.GoogleRefreshToken = ""
+	cfg.UseRadarr = true
+	cfg.RadarrURL = "http://radarr/api/v3"
+	cfg.RadarrAPIKey = "radarr-key"
+	cfg.UseSonarr = false
+	cfg.UseSteam = false
+	cfg.CalendarTargets = []CalendarTarget{{ID: "primary", RadarrEnabled: true}}
+
+	items, complete, done, required := setupChecklist(cfg)
+
+	if len(items) != 6 {
+		t.Fatalf("items = %#v, want six checklist items", items)
+	}
+	if complete {
+		t.Fatal("checklist complete = true, want false without Google connection")
+	}
+	if done != 2 || required != 3 {
+		t.Fatalf("done/required = %d/%d, want 2/3", done, required)
+	}
+}
+
+func TestDashboardTemplateRendersSetupChecklist(t *testing.T) {
+	loadTemplates()
+	var out bytes.Buffer
+	data := DashboardData{
+		PageBase: PageBase{CSRFToken: "test-token", CurrentPage: "dashboard"},
+		SetupChecklist: []SetupChecklistItem{
+			{Label: "Connect Google Calendar", Detail: "Required for calendar writes.", Href: "/settings#calendar"},
+			{Label: "Set up Pushover", Detail: "Optional sync notifications.", Optional: true, Href: "/settings#pushover"},
+		},
+		SetupChecklistDone:     0,
+		SetupChecklistRequired: 1,
+	}
+	if err := pageTemplates["dashboard"].ExecuteTemplate(&out, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		`id="setup-checklist-card"`,
+		`Setup Checklist`,
+		`0/1 required`,
+		`Connect Google Calendar`,
+		`Set up Pushover`,
+		`calendarr-setup-checklist-dismissed`,
+		`function dismissSetupChecklist()`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("dashboard template missing setup checklist rendering %q", want)
+		}
+	}
+}
+
+func TestLogsTemplateRendersSearchAndFilters(t *testing.T) {
+	src, err := os.ReadFile("templates/logs.html")
+	if err != nil {
+		t.Fatalf("read logs template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`id="log-search"`,
+		`id="log-severity-filter"`,
+		`id="log-source-filter"`,
+		`id="log-filter-count"`,
+		`function applyLogFilters()`,
+		`function logSeverity(block)`,
+		`function logSource(block)`,
+		`No log entries match the current filters.`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("logs template missing search/filter wiring %q", want)
+		}
+	}
+}
+
+func TestLogsTemplateKeepsFilteredLogsAsText(t *testing.T) {
+	src, err := os.ReadFile("templates/logs.html")
+	if err != nil {
+		t.Fatalf("read logs template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`el.textContent = filtered.length ?`,
+		`rawLogContent = data.content ||`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("logs template should render filtered log content as text, missing %q", want)
+		}
+	}
+	if strings.Contains(html, `el.innerHTML`) {
+		t.Fatal("logs template must not render log content with innerHTML")
+	}
+}
+
 func TestUpcomingTemplateSupportsSteamAndEscapesAPIText(t *testing.T) {
 	src, err := os.ReadFile("templates/upcoming.html")
 	if err != nil {
@@ -270,6 +409,30 @@ func TestUpcomingTemplateSupportsSteamAndEscapesAPIText(t *testing.T) {
 	} {
 		if strings.Contains(html, blocked) {
 			t.Fatalf("upcoming template renders API text without escaping: %q", blocked)
+		}
+	}
+}
+
+func TestUpcomingTemplateSupportsSavedFilterAndExports(t *testing.T) {
+	src, err := os.ReadFile("templates/upcoming.html")
+	if err != nil {
+		t.Fatalf("read upcoming template: %v", err)
+	}
+	html := string(src)
+	for _, want := range []string{
+		`const UPCOMING_FILTER_KEY = 'calendarr-upcoming-filter'`,
+		`localStorage.setItem(UPCOMING_FILTER_KEY, f)`,
+		`function filteredUpcomingEvents()`,
+		`function exportUpcoming(format)`,
+		`function csvCell(value)`,
+		`downloadText(`,
+		`onclick="exportUpcoming('csv')"`,
+		`onclick="exportUpcoming('json')"`,
+		`JSON.stringify(rows, null, 2)`,
+		`header.map(key => csvCell(row[key])).join(',')`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("upcoming template missing saved filter/export wiring %q", want)
 		}
 	}
 }

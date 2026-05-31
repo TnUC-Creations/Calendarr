@@ -37,6 +37,46 @@
             {{end}}
         </div>
     </div>
+    <div class="px-3 py-2 border-bottom" style="border-color:var(--border) !important;">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label" for="log-search" style="font-size:0.82rem;">Search</label>
+                <input type="search" class="form-control form-control-sm" id="log-search"
+                       placeholder="Search logs..." oninput="applyLogFilters()">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="log-severity-filter" style="font-size:0.82rem;">Severity</label>
+                <select class="form-select form-select-sm" id="log-severity-filter" onchange="applyLogFilters()">
+                    <option value="all">All severities</option>
+                    <option value="error">Errors</option>
+                    <option value="warning">Warnings</option>
+                    <option value="update">Updates</option>
+                    <option value="sync">Sync</option>
+                    <option value="settings">Settings tests</option>
+                    <option value="info">Info</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="log-source-filter" style="font-size:0.82rem;">Source</label>
+                <select class="form-select form-select-sm" id="log-source-filter" onchange="applyLogFilters()">
+                    <option value="all">All sources</option>
+                    <option value="radarr">Radarr</option>
+                    <option value="sonarr">Sonarr</option>
+                    <option value="steam">Steam</option>
+                    <option value="calendar">Google Calendar</option>
+                    <option value="pushover">Pushover</option>
+                    <option value="updater">Updater</option>
+                    <option value="system">System</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="clearLogFilters()" title="Clear filters">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+        <div class="text-muted mt-2" id="log-filter-count" style="font-size:0.8rem;"></div>
+    </div>
     <div class="card-body p-0">
         <pre class="log-output" id="log-content">{{if .LogContent}}{{.LogContent}}{{else}}No logs yet. Run a sync to generate output.{{end}}</pre>
     </div>
@@ -47,6 +87,8 @@
 <script>
 let autoRefreshTimer = null;
 let autoRefreshActive = false;
+let rawLogContent = document.getElementById('log-content')?.textContent || '';
+const LOG_SEPARATOR = '============================================================';
 
 function toggleAutoRefresh() {
     autoRefreshActive = !autoRefreshActive;
@@ -70,9 +112,71 @@ function fetchLogContent() {
         .then(r => r.json())
         .then(data => {
             const el = document.getElementById('log-content');
-            if (el) el.textContent = data.content || 'No logs yet. Run a sync to generate output.';
+            rawLogContent = data.content || 'No logs yet. Run a sync to generate output.';
+            if (el) applyLogFilters();
         })
         .catch(() => {});
 }
+
+function splitLogBlocks(content) {
+    const text = String(content || '').trim();
+    if (!text) return [];
+    return text.split(LOG_SEPARATOR).map(block => block.trim()).filter(Boolean);
+}
+
+function logSeverity(block) {
+    const lower = block.toLowerCase();
+    if (lower.includes('[error]') || lower.includes(' error:') || lower.includes(' failed') || lower.includes('failure')) return 'error';
+    if (lower.includes('[warning]') || lower.includes(' warning') || lower.includes('rate limit')) return 'warning';
+    if (lower.includes('[updater]') || lower.includes(' update')) return 'update';
+    if (lower.includes('[sync]') || lower.includes('run at ')) return 'sync';
+    if (lower.includes('[settings test]')) return 'settings';
+    return 'info';
+}
+
+function logSource(block) {
+    const lower = block.toLowerCase();
+    if (lower.includes('[radarr]') || lower.includes('radarr')) return 'radarr';
+    if (lower.includes('[sonarr]') || lower.includes('sonarr')) return 'sonarr';
+    if (lower.includes('[steam]') || lower.includes('steam')) return 'steam';
+    if (lower.includes('google calendar') || lower.includes('[calendar]')) return 'calendar';
+    if (lower.includes('[pushover]') || lower.includes('pushover')) return 'pushover';
+    if (lower.includes('[updater]') || lower.includes('update')) return 'updater';
+    if (lower.includes('[system]') || lower.includes('[startup]') || lower.includes('[scheduler]')) return 'system';
+    return 'system';
+}
+
+function applyLogFilters() {
+    const el = document.getElementById('log-content');
+    const countEl = document.getElementById('log-filter-count');
+    if (!el) return;
+    const query = (document.getElementById('log-search')?.value || '').trim().toLowerCase();
+    const severity = document.getElementById('log-severity-filter')?.value || 'all';
+    const source = document.getElementById('log-source-filter')?.value || 'all';
+    const blocks = splitLogBlocks(rawLogContent);
+    const filtered = blocks.filter(block => {
+        const lower = block.toLowerCase();
+        if (query && !lower.includes(query)) return false;
+        if (severity !== 'all' && logSeverity(block) !== severity) return false;
+        if (source !== 'all' && logSource(block) !== source) return false;
+        return true;
+    });
+    el.textContent = filtered.length ? filtered.join('\n' + LOG_SEPARATOR + '\n') : 'No log entries match the current filters.';
+    if (countEl) {
+        countEl.textContent = blocks.length ? `${filtered.length} of ${blocks.length} log block(s) shown` : '';
+    }
+}
+
+function clearLogFilters() {
+    const search = document.getElementById('log-search');
+    const severity = document.getElementById('log-severity-filter');
+    const source = document.getElementById('log-source-filter');
+    if (search) search.value = '';
+    if (severity) severity.value = 'all';
+    if (source) source.value = 'all';
+    applyLogFilters();
+}
+
+applyLogFilters();
 </script>
 {{end}}

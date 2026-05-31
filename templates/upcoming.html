@@ -13,6 +13,14 @@
                 <button type="button" class="btn btn-outline-primary" id="filter-episode" onclick="setFilter('episode')">Episodes</button>
                 <button type="button" class="btn btn-outline-success" id="filter-steam" onclick="setFilter('steam')">Steam</button>
             </div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Export upcoming releases">
+                <button type="button" class="btn btn-outline-secondary" onclick="exportUpcoming('csv')">
+                    <i class="bi bi-filetype-csv"></i> CSV
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="exportUpcoming('json')">
+                    <i class="bi bi-filetype-json"></i> JSON
+                </button>
+            </div>
         </div>
     </div>
     <div class="card-body p-0" id="upcoming-body">
@@ -26,11 +34,24 @@
 {{define "scripts"}}
 <script>
 let allEvents = [];
-let activeFilter = 'all';
+const UPCOMING_FILTER_KEY = 'calendarr-upcoming-filter';
+const VALID_UPCOMING_FILTERS = ['all', 'theater', 'digital', 'episode', 'steam'];
+let activeFilter = savedUpcomingFilter();
+
+function savedUpcomingFilter() {
+    const saved = localStorage.getItem(UPCOMING_FILTER_KEY);
+    return VALID_UPCOMING_FILTERS.includes(saved) ? saved : 'all';
+}
+
+function filteredUpcomingEvents() {
+    return activeFilter === 'all' ? allEvents : allEvents.filter(e => e.kind === activeFilter);
+}
 
 function setFilter(f) {
+    if (!VALID_UPCOMING_FILTERS.includes(f)) f = 'all';
     activeFilter = f;
-    document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
+    localStorage.setItem(UPCOMING_FILTER_KEY, f);
+    document.querySelectorAll('[id^="filter-"]').forEach(b => b.classList.remove('active'));
     document.getElementById('filter-' + f).classList.add('active');
     renderEvents();
 }
@@ -75,8 +96,48 @@ function daysLabel(n) {
     return `<span class="badge bg-secondary text-muted">${n}d away</span>`;
 }
 
+function csvCell(value) {
+    const text = String(value ?? '');
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
+function exportRows() {
+    return filteredUpcomingEvents().map(e => ({
+        date: String(e.date || '').split('T')[0],
+        title: e.title || '',
+        kind: e.kind || '',
+        calendar: e.calendar || '',
+    }));
+}
+
+function downloadText(filename, content, mime) {
+    const blob = new Blob([content], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function exportUpcoming(format) {
+    const rows = exportRows();
+    const suffix = activeFilter === 'all' ? 'all' : activeFilter;
+    if (format === 'json') {
+        downloadText(`calendarr-upcoming-${suffix}.json`, JSON.stringify(rows, null, 2), 'application/json');
+        return;
+    }
+    const header = ['date', 'title', 'kind', 'calendar'];
+    const csv = [header.map(csvCell).join(',')]
+        .concat(rows.map(row => header.map(key => csvCell(row[key])).join(',')))
+        .join('\r\n');
+    downloadText(`calendarr-upcoming-${suffix}.csv`, csv + '\r\n', 'text/csv');
+}
+
 function renderEvents() {
-    const filtered = activeFilter === 'all' ? allEvents : allEvents.filter(e => e.kind === activeFilter);
+    const filtered = filteredUpcomingEvents();
     document.getElementById('event-count').textContent = filtered.length;
 
     const body = document.getElementById('upcoming-body');
@@ -123,7 +184,7 @@ fetch('/api/upcoming')
             return;
         }
         allEvents = data.events || [];
-        renderEvents();
+        setFilter(activeFilter);
     })
     .catch(err => {
         document.getElementById('upcoming-body').innerHTML =

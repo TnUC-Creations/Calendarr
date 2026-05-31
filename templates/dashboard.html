@@ -10,6 +10,30 @@
         max-width:100%;
         vertical-align:top;
     }
+    .source-health-grid {
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+        gap:0.75rem;
+    }
+    .source-health-item {
+        border:1px solid var(--border);
+        border-radius:6px;
+        padding:0.75rem;
+        min-height:76px;
+        background:rgba(255,255,255,0.02);
+    }
+    .setup-checklist-grid {
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+        gap:0.75rem;
+    }
+    .setup-checklist-item {
+        border:1px solid var(--border);
+        border-radius:6px;
+        padding:0.75rem;
+        background:rgba(255,255,255,0.02);
+        min-height:94px;
+    }
 </style>
 
 <div class="d-flex align-items-center justify-content-between mb-4 pb-3" style="border-bottom:1px solid var(--border);">
@@ -21,6 +45,49 @@
         <i class="bi bi-arrow-clockwise"></i> Restart Service
     </button>
 </div>
+
+{{if .SetupChecklist}}
+<div class="card mb-4" id="setup-checklist-card" data-required-complete="{{if .SetupChecklistComplete}}1{{else}}0{{end}}">
+    <div class="card-header d-flex align-items-center justify-content-between gap-2">
+        <span><i class="bi bi-list-check"></i> Setup Checklist</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary">{{.SetupChecklistDone}}/{{.SetupChecklistRequired}} required</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="dismissSetupChecklist()" title="Dismiss checklist">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="setup-checklist-grid">
+            {{range .SetupChecklist}}
+            <div class="setup-checklist-item">
+                <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                    <div class="fw-semibold">
+                        {{if .Done}}
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>
+                        {{else}}
+                            <i class="bi bi-circle text-muted me-1"></i>
+                        {{end}}
+                        {{.Label}}
+                    </div>
+                    {{if .Optional}}
+                        <span class="badge bg-secondary">Optional</span>
+                    {{else}}
+                        <span class="badge bg-primary">Required</span>
+                    {{end}}
+                </div>
+                <div class="text-muted mb-2" style="font-size:0.82rem;">{{.Detail}}</div>
+                {{if not .Done}}
+                <a href="{{.Href}}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-gear"></i> Configure
+                </a>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}
 
 <div class="row g-4 mb-4">
 
@@ -146,6 +213,23 @@
     </div>
 </div>
 
+<!-- Source health -->
+<div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-activity"></i> Source Health</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="source-health-refresh" onclick="loadSourceHealth()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="source-health-body" class="source-health-grid">
+            <div class="text-muted" style="font-size:0.88rem;">
+                <span class="spinner-border spinner-border-sm me-2"></span> Loading source health...
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Last run notifications -->
 <div class="card mb-4">
     <div class="card-header d-flex align-items-center justify-content-between">
@@ -242,9 +326,10 @@
 {{define "scripts"}}
 <script>
 let wasRunning = {{if .IsRunning}}true{{else}}false{{end}};
+const SETUP_CHECKLIST_DISMISSED_KEY = 'calendarr-setup-checklist-dismissed';
 
 function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function changeIcon(action) {
@@ -252,6 +337,20 @@ function changeIcon(action) {
     if (action === 'updated') return '<i class="bi bi-arrow-repeat me-1 change-updated"></i>';
     return '<i class="bi bi-plus-lg text-success me-1"></i>';
 }
+
+function applySetupChecklistDismissal() {
+    const card = document.getElementById('setup-checklist-card');
+    if (!card) return;
+    if (localStorage.getItem(SETUP_CHECKLIST_DISMISSED_KEY) === '1') {
+        card.classList.add('d-none');
+    }
+}
+
+function dismissSetupChecklist() {
+    localStorage.setItem(SETUP_CHECKLIST_DISMISSED_KEY, '1');
+    document.getElementById('setup-checklist-card')?.classList.add('d-none');
+}
+applySetupChecklistDismissal();
 
 function updateChangesCard(changes, status) {
     const body  = document.getElementById('changes-body');
@@ -320,6 +419,54 @@ function pollStatus() {
         .catch(() => {});
 }
 setInterval(pollStatus, 3000);
+
+function sourceHealthBadge(status) {
+    if (status === 'ok') return '<span class="badge bg-success">OK</span>';
+    if (status === 'warning') return '<span class="badge bg-warning text-dark">Needs setup</span>';
+    return '<span class="badge bg-secondary">Disabled</span>';
+}
+
+function renderSourceHealth(sources) {
+    const body = document.getElementById('source-health-body');
+    if (!body) return;
+    const list = Array.isArray(sources) ? sources : [];
+    if (!list.length) {
+        body.innerHTML = '<div class="text-muted" style="font-size:0.88rem;">No source health data available.</div>';
+        return;
+    }
+    body.innerHTML = list.map(source => `
+        <div class="source-health-item">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                <span class="fw-semibold">${escHtml(source.name)}</span>
+                ${sourceHealthBadge(source.status)}
+            </div>
+            <div class="text-muted" style="font-size:0.82rem;">${escHtml(source.message)}</div>
+        </div>
+    `).join('');
+}
+
+function loadSourceHealth() {
+    const body = document.getElementById('source-health-body');
+    const btn = document.getElementById('source-health-refresh');
+    if (!body) return;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Refresh';
+    }
+    fetch('/api/source-health')
+        .then(r => r.json())
+        .then(data => renderSourceHealth(data.sources))
+        .catch(() => {
+            body.innerHTML = '<div class="text-danger" style="font-size:0.88rem;"><i class="bi bi-exclamation-triangle"></i> Could not load source health.</div>';
+        })
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+            }
+        });
+}
+loadSourceHealth();
 
 function restartService() {
     if (!confirm('Restart the Calendarr service? The page will go offline briefly then reload automatically.')) return;
