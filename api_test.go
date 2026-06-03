@@ -294,6 +294,60 @@ func TestAPITestPushoverRejectsMissingFields(t *testing.T) {
 	assertJSONFailure(t, rec.Body.String())
 }
 
+func TestPushoverValidationMessageUsesHTTP400ErrorBody(t *testing.T) {
+	ok, msg := pushoverValidationMessage(http.StatusBadRequest, []byte(`{
+		"status": 0,
+		"errors": ["application token is invalid"]
+	}`))
+
+	if ok {
+		t.Fatal("ok = true, want false")
+	}
+	if msg != "application token is invalid" {
+		t.Fatalf("message = %q, want Pushover error body", msg)
+	}
+}
+
+func TestPushoverValidationMessageAcceptsStatusOne(t *testing.T) {
+	ok, msg := pushoverValidationMessage(http.StatusOK, []byte(`{"status":1}`))
+
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if msg != "Credentials valid!" {
+		t.Fatalf("message = %q, want credentials valid", msg)
+	}
+}
+
+func TestPushoverValidationMessageRejectsUnreadableSuccessBody(t *testing.T) {
+	ok, msg := pushoverValidationMessage(http.StatusOK, []byte(`not-json`))
+
+	if ok {
+		t.Fatal("ok = true, want false")
+	}
+	if msg != "Could not read Pushover response." {
+		t.Fatalf("message = %q, want unreadable response message", msg)
+	}
+}
+
+func TestPushoverValidationMessageRedactsSecretLikeErrors(t *testing.T) {
+	secret := "GOCSPX-" + strings.Repeat("A", 32)
+	ok, msg := pushoverValidationMessage(http.StatusBadRequest, []byte(`{
+		"status": 0,
+		"errors": ["bad `+secret+`"]
+	}`))
+
+	if ok {
+		t.Fatal("ok = true, want false")
+	}
+	if strings.Contains(msg, secret) {
+		t.Fatalf("message leaked secret: %q", msg)
+	}
+	if !strings.Contains(msg, "[redacted]") {
+		t.Fatalf("message = %q, want redaction marker", msg)
+	}
+}
+
 func TestSettingsTestFailureLogRedactsSecretsAndURLs(t *testing.T) {
 	oldDataDir := dataDir
 	dataDir = t.TempDir()

@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -934,20 +935,37 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		settingsTestError(w, service, http.StatusBadGateway, fmt.Sprintf("HTTP %d", resp.StatusCode))
-		return
-	}
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+	if err != nil {
 		settingsTestError(w, service, http.StatusBadGateway, "Could not read Pushover response.")
 		return
 	}
-	if status, _ := result["status"].(float64); status == 1 {
+	ok, msg := pushoverValidationMessage(resp.StatusCode, data)
+	if ok {
 		logSettingsTestSuccess(service)
-		jsonOK(w, map[string]interface{}{"ok": true, "message": "Credentials valid!"})
+		jsonOK(w, map[string]interface{}{"ok": true, "message": msg})
 		return
 	}
+	settingsTestError(w, service, http.StatusBadGateway, msg)
+}
+
+func pushoverValidationMessage(statusCode int, data []byte) (bool, string) {
+	var result map[string]interface{}
+	if len(data) > 0 && json.Unmarshal(data, &result) == nil {
+		if status, _ := result["status"].(float64); status == 1 && statusCode == http.StatusOK {
+			return true, "Credentials valid!"
+		}
+		if msg := pushoverErrorMessage(result); msg != "" {
+			return false, msg
+		}
+	}
+	if statusCode != http.StatusOK {
+		return false, fmt.Sprintf("HTTP %d", statusCode)
+	}
+	return false, "Could not read Pushover response."
+}
+
+func pushoverErrorMessage(result map[string]interface{}) string {
 	msg := "Invalid credentials"
 	if errs, ok := result["errors"].([]interface{}); ok && len(errs) > 0 {
 		parts := make([]string, len(errs))
@@ -956,7 +974,7 @@ func apiTestPushover(w http.ResponseWriter, r *http.Request) {
 		}
 		msg = strings.Join(parts, ", ")
 	}
-	settingsTestError(w, service, http.StatusBadGateway, msg)
+	return redactSecretLikeText(msg)
 }
 
 func apiTestSteam(w http.ResponseWriter, r *http.Request) {
